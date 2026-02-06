@@ -2,30 +2,133 @@
 <html>
 <head>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
 </head>
 
 <body>
-  <a-scene>
-    
+  <a-scene physics="debug: false">
     <!-- Cámara / jugador -->
     <a-entity id="player"
-      position="0 1.6 5"
       camera
       look-controls
-      wasd-controls>
+      wasd-controls="acceleration: 25"
+      kinematic-body>
     </a-entity>
 
     <!-- Piso -->
-    <a-plane rotation="-90 0 0" width="50" height="50" color="#222"></a-plane>
+    <a-plane id="floor" rotation="-90 0 0" color="#222" static-body></a-plane>
 
-    <!-- Paredes -->
-    <a-box position="0 1 -5" width="10" height="3" depth="1" color="#555"></a-box>
-    <a-box position="5 1 0" width="1" height="3" depth="10" color="#666"></a-box>
+    <!-- Laberinto procedural -->
+    <a-entity id="maze"></a-entity>
 
     <!-- Luz -->
     <a-light type="ambient" intensity="0.6"></a-light>
     <a-light type="point" position="0 5 0"></a-light>
-
   </a-scene>
+
+  <script>
+    window.addEventListener('DOMContentLoaded', () => {
+      const rows = 12;
+      const cols = 12;
+      const cellSize = 4;
+      const wallHeight = 3;
+      const wallThickness = 0.4;
+
+      const totalWidth = cols * cellSize;
+      const totalDepth = rows * cellSize;
+      const offsetX = -totalWidth / 2;
+      const offsetZ = -totalDepth / 2;
+
+      const floor = document.getElementById('floor');
+      floor.setAttribute('width', totalWidth);
+      floor.setAttribute('height', totalDepth);
+      floor.setAttribute('position', `0 0 0`);
+
+      const player = document.getElementById('player');
+      const startX = offsetX + cellSize / 2;
+      const startZ = offsetZ + cellSize / 2;
+      player.setAttribute('position', `${startX} 1.6 ${startZ}`);
+
+      const maze = document.getElementById('maze');
+
+      const cells = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => ({
+          n: true, e: true, s: true, w: true, visited: false
+        }))
+      );
+
+      const stack = [];
+      let current = { r: 0, c: 0 };
+      cells[0][0].visited = true;
+
+      while (true) {
+        const { r, c } = current;
+        const neighbors = [];
+
+        if (r > 0 && !cells[r - 1][c].visited) neighbors.push({ r: r - 1, c, dir: 'n' });
+        if (c < cols - 1 && !cells[r][c + 1].visited) neighbors.push({ r, c: c + 1, dir: 'e' });
+        if (r < rows - 1 && !cells[r + 1][c].visited) neighbors.push({ r: r + 1, c, dir: 's' });
+        if (c > 0 && !cells[r][c - 1].visited) neighbors.push({ r, c: c - 1, dir: 'w' });
+
+        if (neighbors.length > 0) {
+          const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+
+          if (next.dir === 'n') {
+            cells[r][c].n = false;
+            cells[next.r][next.c].s = false;
+          } else if (next.dir === 'e') {
+            cells[r][c].e = false;
+            cells[next.r][next.c].w = false;
+          } else if (next.dir === 's') {
+            cells[r][c].s = false;
+            cells[next.r][next.c].n = false;
+          } else if (next.dir === 'w') {
+            cells[r][c].w = false;
+            cells[next.r][next.c].e = false;
+          }
+
+          stack.push(current);
+          current = { r: next.r, c: next.c };
+          cells[current.r][current.c].visited = true;
+        } else if (stack.length > 0) {
+          current = stack.pop();
+        } else {
+          break;
+        }
+      }
+
+      function addWall(x, z, width, depth) {
+        const wall = document.createElement('a-box');
+        wall.setAttribute('position', `${x} ${wallHeight / 2} ${z}`);
+        wall.setAttribute('width', width);
+        wall.setAttribute('height', wallHeight);
+        wall.setAttribute('depth', depth);
+        wall.setAttribute('color', '#666');
+        wall.setAttribute('static-body', '');
+        maze.appendChild(wall);
+      }
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = cells[r][c];
+          const x0 = offsetX + c * cellSize;
+          const z0 = offsetZ + r * cellSize;
+
+          if (cell.n) {
+            addWall(x0 + cellSize / 2, z0, cellSize, wallThickness);
+          }
+          if (cell.w) {
+            addWall(x0, z0 + cellSize / 2, wallThickness, cellSize);
+          }
+          if (r === rows - 1 && cell.s) {
+            addWall(x0 + cellSize / 2, z0 + cellSize, cellSize, wallThickness);
+          }
+          if (c === cols - 1 && cell.e) {
+            addWall(x0 + cellSize, z0 + cellSize / 2, wallThickness, cellSize);
+          }
+        }
+      }
+    });
+  </script>
 </body>
 </html>
