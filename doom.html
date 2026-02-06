@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+</head>
+
+<body>
+  <a-scene>
+    
+    <!-- Cámara / jugador -->
+    <a-entity id="player"
+      position="0 1.6 5"
+      camera
+      look-controls
+      wasd-controls>
+    </a-entity>
+
+    <!-- Piso -->
+    <a-plane rotation="-90 0 0" width="50" height="50" color="#222"></a-plane>
+
+    <!-- Paredes -->
+    <a-box position="0 1 -5" width="10" height="3" depth="1" color="#555"></a-box>
+    <a-box position="5 1 0" width="1" height="3" depth="10" color="#666"></a-box>
+
+    <!-- Luz -->
+    <a-light type="ambient" intensity="0.6"></a-light>
+    <a-light type="point" position="0 5 0"></a-light>
+
+  </a-scene>
+</body>
+</html>
