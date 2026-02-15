@@ -1,4 +1,10 @@
 AFRAME.registerComponent('hud-logic', {
+  schema: {
+    paddingX: { type: 'number', default: 0.05 },
+    paddingY: { type: 'number', default: 0.04 },
+    lineGap: { type: 'number', default: 0.03 }
+  },
+
   init: function () {
     this.scene = this.el.sceneEl;
     this.gameSystem = this.scene.systems['game-manager'];
@@ -7,6 +13,9 @@ AFRAME.registerComponent('hud-logic', {
     this.ammoText = this.el.querySelector('#hud-ammo');
     this.timeText = this.el.querySelector('#hud-time');
     this.statusText = this.el.querySelector('#hud-status');
+    this.background = this.el.querySelector('#hud-bg');
+
+    this.textItems = [this.scoreText, this.ammoText, this.timeText, this.statusText];
 
     this.boundOnStateChanged = this.onStateChanged.bind(this);
     this.boundOnGameOver = this.onGameOver.bind(this);
@@ -35,6 +44,7 @@ AFRAME.registerComponent('hud-logic', {
     if (this.statusText) {
       this.statusText.setAttribute('value', '');
     }
+    this.scheduleResize();
   },
 
   onGameOver: function (event) {
@@ -52,6 +62,7 @@ AFRAME.registerComponent('hud-logic', {
     if (this.statusText) {
       this.statusText.setAttribute('value', label);
     }
+    this.scheduleResize();
   },
 
   render: function (snapshot) {
@@ -70,5 +81,69 @@ AFRAME.registerComponent('hud-logic', {
     if (this.timeText) {
       this.timeText.setAttribute('value', 'Tiempo: ' + Math.ceil(snapshot.timeLeft) + 's');
     }
+
+    this.scheduleResize();
+  },
+
+  scheduleResize: function () {
+    var self = this;
+    if (this.resizeTimeout) {
+      clearTimeout(this.resizeTimeout);
+    }
+    this.resizeTimeout = setTimeout(function () {
+      self.resizeBackground();
+    }, 0);
+  },
+
+  resizeBackground: function () {
+    var maxWidth = 0;
+    var totalHeight = 0;
+    var yCursor = this.data.paddingY;
+
+    for (var i = 0; i < this.textItems.length; i++) {
+      var textEl = this.textItems[i];
+      if (!textEl || !textEl.getAttribute('value')) {
+        continue;
+      }
+
+      var size = this.getTextSize(textEl);
+      maxWidth = Math.max(maxWidth, size.width);
+
+      textEl.setAttribute('position', {
+        x: this.data.paddingX,
+        y: -yCursor,
+        z: 0
+      });
+
+      yCursor += size.height + this.data.lineGap;
+      totalHeight = yCursor - this.data.lineGap + this.data.paddingY;
+    }
+
+    if (this.background) {
+      var bgWidth = maxWidth + this.data.paddingX * 2;
+      var bgHeight = totalHeight;
+
+      this.background.setAttribute('width', bgWidth);
+      this.background.setAttribute('height', bgHeight);
+      this.background.setAttribute('position', {
+        x: bgWidth / 2,
+        y: -bgHeight / 2,
+        z: -0.01
+      });
+    }
+  },
+
+  getTextSize: function (textEl) {
+    var mesh = textEl.getObject3D('mesh');
+    if (!mesh || !mesh.geometry) {
+      return { width: 0.3, height: 0.08 };
+    }
+
+    mesh.geometry.computeBoundingBox();
+    var box = mesh.geometry.boundingBox;
+    var size = new THREE.Vector3();
+    box.getSize(size);
+
+    return { width: size.x, height: size.y };
   }
 });
