@@ -1,9 +1,102 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
-</head>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Duck Hunt VR - ECS Base</title>
 
-<body></body>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="./js/game-manager.js"></script>
+    <script src="./js/target-logic.js"></script>
+    <script src="./js/hud-logic.js"></script>
+    <script src="./js/weapon-logic.js"></script>
+  </head>
+  <body>
+    <a-scene background="color: #87ceeb" game-manager="roundTime: 90; bulletsPerBird: 3; totalBirds: 3">
+      <a-assets>
+        <a-asset-item id="booth-model" src="./src/mapa/splatoon-dj-booth.glb"></a-asset-item>
+        <a-asset-item id="weapon-model" src="./src/personajes/pistola.glb"></a-asset-item>
+        <a-asset-item id="angry-bird-model" src="./src/personajes/angry-bird.glb"></a-asset-item>
+      </a-assets>
+
+      <a-entity light="type: ambient; intensity: 0.7"></a-entity>
+      <a-entity light="type: directional; intensity: 0.9" position="2 6 4"></a-entity>
+
+      <a-plane rotation="-90 0 0" width="60" height="60" color="#5d8f4d"></a-plane>
+
+      <a-entity id="dj-booth" gltf-model="#booth-model" position="0 0 -8" scale="2 2 2"></a-entity>
+
+      <!--
+        Los targets usan el mismo componente reusable target-logic.
+        Cada entidad vive de forma autónoma y se comunica con el estado global por eventos/sistema.
+      -->
+      <a-entity
+        id="bird-1"
+        class="target"
+        gltf-model="#angry-bird-model"
+        target-logic="
+          movementAreaMin: -8 1 -14;
+          movementAreaMax: 8 6 -4;
+          hiddenSpawnCenter: 0 1.5 -9;
+          hiddenSpawnRadius: 1.5;
+          speed: 2.4;
+          respawnDelay: 1200
+        "
+      ></a-entity>
+
+      <a-entity
+        id="bird-2"
+        class="target"
+        gltf-model="#angry-bird-model"
+        target-logic="
+          movementAreaMin: -8 1 -14;
+          movementAreaMax: 8 6 -4;
+          hiddenSpawnCenter: 0 1.5 -9;
+          hiddenSpawnRadius: 1.5;
+          speed: 2.0;
+          respawnDelay: 1500
+        "
+      ></a-entity>
+
+      <a-entity
+        id="bird-3"
+        class="target"
+        gltf-model="#angry-bird-model"
+        target-logic="
+          movementAreaMin: -8 1 -14;
+          movementAreaMax: 8 6 -4;
+          hiddenSpawnCenter: 0 1.5 -9;
+          hiddenSpawnRadius: 1.5;
+          speed: 2.7;
+          respawnDelay: 1800
+        "
+      ></a-entity>
+
+      <a-entity id="rig" position="0 1.6 0">
+        <a-camera>
+          <!-- HUD mínimo en pantalla, desacoplado vía eventos del sistema global -->
+          <a-entity id="hud" hud-logic position="-0.62 0.36 -1.15">
+            <a-text id="hud-score" value="Puntaje: 0" color="#ffffff" width="1.9" position="0 0 0"></a-text>
+            <a-text id="hud-ammo" value="Balas: 0" color="#ffffff" width="1.9" position="0 -0.1 0"></a-text>
+            <a-text id="hud-time" value="Tiempo: 0s" color="#ffffff" width="1.9" position="0 -0.2 0"></a-text>
+            <a-text id="hud-status" value="" color="#ffeb3b" width="2" position="0 -0.32 0"></a-text>
+          </a-entity>
+
+          <!--
+            El arma es hija de cámara para mantener alineación con la vista.
+            weapon-logic consulta game-manager (system) para gastar munición sin acoplarse a targets concretos.
+          -->
+          <a-entity
+            id="weapon"
+            position="0.2 -0.25 -0.42"
+            rotation="0 -10 0"
+            scale="0.06 0.06 0.06"
+            gltf-model="#weapon-model"
+            raycaster="objects: .target; far: 40"
+            weapon-logic="shootCooldown: 250; maxVisualSize: 0.22"
+          ></a-entity>
+        </a-camera>
+      </a-entity>
+    </a-scene>
+  </body>
 </html>
