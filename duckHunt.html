@@ -16,7 +16,9 @@
       <a-assets>
         <a-asset-item id="booth-model" src="./src/mapa/splatoon-dj-booth.glb"></a-asset-item>
         <a-asset-item id="weapon-model" src="./src/personajes/pistola.glb"></a-asset-item>
-        <a-asset-item id="angry-bird-model" src="./src/personajes/angry-bird.glb"></a-asset-item>
+        <a-asset-item id="red-bird-model" src="./src/personajes/red_bird.glb"></a-asset-item>
+        <a-asset-item id="black-bird-model" src="./src/personajes/blackBird.glb"></a-asset-item>
+        <a-asset-item id="yellow-bird-model" src="./src/personajes/yellowBird.glb"></a-asset-item>
       </a-assets>
 
       <a-entity light="type: ambient; intensity: 0.7"></a-entity>
@@ -33,7 +35,8 @@
       <a-entity
         id="bird-1"
         class="target"
-        gltf-model="#angry-bird-model"
+        gltf-model="#red-bird-model"
+        scale="0.35 0.35 0.35"
         target-logic="
           movementAreaMin: -8 1 -14;
           movementAreaMax: 8 6 -4;
@@ -47,7 +50,8 @@
       <a-entity
         id="bird-2"
         class="target"
-        gltf-model="#angry-bird-model"
+        gltf-model="#black-bird-model"
+        scale="0.35 0.35 0.35"
         target-logic="
           movementAreaMin: -8 1 -14;
           movementAreaMax: 8 6 -4;
@@ -61,7 +65,8 @@
       <a-entity
         id="bird-3"
         class="target"
-        gltf-model="#angry-bird-model"
+        gltf-model="#yellow-bird-model"
+        scale="0.35 0.35 0.35"
         target-logic="
           movementAreaMin: -8 1 -14;
           movementAreaMax: 8 6 -4;
