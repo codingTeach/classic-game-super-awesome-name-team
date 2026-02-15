@@ -14,7 +14,7 @@
   <body>
     <a-scene background="color: #87ceeb" game-manager="roundTime: 90; bulletsPerBird: 3; totalBirds: 3">
       <a-assets>
-        <a-asset-item id="booth-model" src="./src/mapa/splatoon-dj-booth.glb"></a-asset-item>
+        <a-asset-item id="booth-model" src="./src/mapas/splatoon_3_dj_booth.glb"></a-asset-item>
         <a-asset-item id="weapon-model" src="./src/personajes/pistola.glb"></a-asset-item>
         <a-asset-item id="red-bird-model" src="./src/personajes/red_bird.glb"></a-asset-item>
         <a-asset-item id="black-bird-model" src="./src/personajes/blackBird.glb"></a-asset-item>
@@ -26,7 +26,7 @@
 
       <a-plane rotation="-90 0 0" width="60" height="60" color="#5d8f4d"></a-plane>
 
-      <a-entity id="dj-booth" gltf-model="#booth-model" position="0 0 -8" scale="2 2 2"></a-entity>
+      <a-entity id="dj-booth" gltf-model="#booth-model" position="0 0 -4" scale="2.5 2.5 2.5"></a-entity>
 
       <!--
         Los targets usan el mismo componente reusable target-logic.
@@ -36,10 +36,10 @@
         id="bird-1"
         class="target"
         gltf-model="#red-bird-model"
-        scale="0.35 0.35 0.35"
+        scale="0.5 0.5 0.5"
         target-logic="
-          movementAreaMin: -8 1 -14;
-          movementAreaMax: 8 6 -4;
+          movementAreaMin: -8 1 -10;
+          movementAreaMax: 8 6 -5;
           hiddenSpawnCenter: 0 1.5 -9;
           hiddenSpawnRadius: 1.5;
           speed: 2.4;
@@ -51,10 +51,10 @@
         id="bird-2"
         class="target"
         gltf-model="#black-bird-model"
-        scale="0.35 0.35 0.35"
+        scale="0.5 0.5 0.5"
         target-logic="
-          movementAreaMin: -8 1 -14;
-          movementAreaMax: 8 6 -4;
+          movementAreaMin: -8 1 -10;
+          movementAreaMax: 8 6 -5;
           hiddenSpawnCenter: 0 1.5 -9;
           hiddenSpawnRadius: 1.5;
           speed: 2.0;
@@ -66,10 +66,10 @@
         id="bird-3"
         class="target"
         gltf-model="#yellow-bird-model"
-        scale="0.35 0.35 0.35"
+        scale="0.8 0.8 0.8"
         target-logic="
-          movementAreaMin: -8 1 -14;
-          movementAreaMax: 8 6 -4;
+          movementAreaMin: -8 1 -10;
+          movementAreaMax: 8 6 -5;
           hiddenSpawnCenter: 0 1.5 -9;
           hiddenSpawnRadius: 1.5;
           speed: 2.7;
@@ -80,7 +80,7 @@
       <a-entity id="rig" position="0 1.6 0">
         <a-camera>
           <!-- HUD mínimo en pantalla, desacoplado vía eventos del sistema global -->
-          <a-entity id="hud" hud-logic position="-2 0.67 -1.15">
+          <a-entity id="hud" hud-logic position="-1.7 0.75 -1.15">
             <a-plane color="#000000" opacity="0.8" width="0.72" height="0.5" position="0.34 -0.18 -0.01"></a-plane>
             <a-text id="hud-score" value="Puntaje: 0" color="#ffffff" width="1.5" align="left" position="0 0 0"></a-text>
             <a-text id="hud-ammo" value="Balas: 0" color="#ffffff" width="1.5" align="left" position="0 -0.1 0"></a-text>
