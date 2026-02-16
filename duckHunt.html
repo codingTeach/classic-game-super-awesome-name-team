@@ -17,20 +17,15 @@
       <a-assets>
         <a-asset-item id="booth-model" src="./src/mapas/splatoon_3_dj_booth.glb"></a-asset-item>
         <a-asset-item id="weapon-model" src="./src/personajes/pistola.glb"></a-asset-item>
-<<<<<<< HEAD
         <a-asset-item id="black-bird-model" src="./src/personajes/blackBird.glb"></a-asset-item>
         <a-asset-item id="red-bird-model" src="./src/personajes/red_bird.glb"></a-asset-item>
-=======
-        <a-asset-item id="red-bird-model" src="./src/personajes/red_bird.glb"></a-asset-item>
-        <a-asset-item id="black-bird-model" src="./src/personajes/blackBird.glb"></a-asset-item>
->>>>>>> 7c8457d1f592a1b4fd5c1db9962711c3246bf298
         <a-asset-item id="yellow-bird-model" src="./src/personajes/yellowBird.glb"></a-asset-item>
       </a-assets>
 
       <a-entity light="type: ambient; intensity: 0.7"></a-entity>
       <a-entity light="type: directional; intensity: 0.9" position="2 6 4"></a-entity>
 
-      <a-plane rotation="-90 0 0" width="60" height="60" color="#5d8f4d"></a-plane>
+      <a-plane rotation="-90 0 0" width="60" height="60" src="./src/mapas/nieve.jpg"></a-plane>
 
       <a-entity id="dj-booth" gltf-model="#booth-model" position="0 0 -3" scale="2.6 2.6 2.6"></a-entity>
 
@@ -48,7 +43,7 @@
           hiddenSpawnCenter: 0 1.5 -9;
           hiddenSpawnRadius: 1.5;
           speed: 2.4;
-          respawnDelay: 
+          respawnDelay: 3000;
         "
       ></a-entity>
 
@@ -62,7 +57,7 @@
           hiddenSpawnCenter: 0 1.5 -9;
           hiddenSpawnRadius: 1.5;
           speed: 2.0;
-          respawnDelay: 1500
+          respawnDelay: 1500;
         "
       ></a-entity>
 
@@ -70,26 +65,21 @@
         id="bird-3"
         class="target"
         gltf-model="#yellow-bird-model"
-<<<<<<< HEAD
-=======
-        scale="0.8 0.8 0.8"
->>>>>>> 7c8457d1f592a1b4fd5c1db9962711c3246bf298
         target-logic="
           movementAreaMin: -8 1 -10;
           movementAreaMax: 8 6 -5;
           hiddenSpawnCenter: 0 1.5 -9;
           hiddenSpawnRadius: 1.5;
           speed: 2.7;
-          respawnDelay: 1800
+          respawnDelay: 1800;
         "
       ></a-entity>
 
       <a-entity id="rig" position="0 1.6 0">
         <a-camera>
 
-          <a-cursor fuse="true" fuse-timeout="1000"></a-cursor>
+          <a-cursor fuse="true" fuse-timeout="700"></a-cursor>
           <!-- HUD mínimo en pantalla, desacoplado vía eventos del sistema global -->
-<<<<<<< HEAD
           <a-entity id="hud" hud-logic position="1.2 0.8 -1.15" scale="0.95 0.95 0.95">
             <a-plane
               id="hud-bg"
@@ -104,14 +94,6 @@
             <a-text id="hud-ammo" value="Balas: 0" color="#ffffff" width="1.6" position="0 -0.08 0" align="left" anchor="left"></a-text>
             <a-text id="hud-time" value="Tiempo: 0s" color="#ffffff" width="1.6" position="0 -0.18 0" align="left" anchor="left"></a-text>
             <a-text id="hud-status" value="" color="#ffeb3b" width="1.8" position="0 -0.3 0" align="left" anchor="left"></a-text>
-=======
-          <a-entity id="hud" hud-logic position="-1.7 0.75 -1.15">
-            <a-plane color="#000000" opacity="0.8" width="0.72" height="0.5" position="0.34 -0.18 -0.01"></a-plane>
-            <a-text id="hud-score" value="Puntaje: 0" color="#ffffff" width="1.5" align="left" position="0 0 0"></a-text>
-            <a-text id="hud-ammo" value="Balas: 0" color="#ffffff" width="1.5" align="left" position="0 -0.1 0"></a-text>
-            <a-text id="hud-time" value="Tiempo: 0s" color="#ffffff" width="1.5" align="left" position="0 -0.2 0"></a-text>
-            <a-text id="hud-status" value="" color="#ffeb3b" width="1.5" align="left" position="0 -0.32 0"></a-text>
->>>>>>> 7c8457d1f592a1b4fd5c1db9962711c3246bf298
           </a-entity>
 
           <!--
