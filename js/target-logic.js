@@ -2,10 +2,12 @@ AFRAME.registerComponent('target-logic', {
   schema: {
     movementAreaMin: { type: 'vec3', default: { x: -8, y: 1, z: -14 } },
     movementAreaMax: { type: 'vec3', default: { x: 8, y: 6, z: -4 } },
-    hiddenSpawnCenter: { type: 'vec3', default: { x: 0, y: 1.5, z: -9 } },
-    hiddenSpawnRadius: { type: 'number', default: 1.5 },
     speed: { type: 'number', default: 2.3 },
-    respawnDelay: { type: 'number', default: 1200 }
+    respawnDelay: { type: 'number', default: 1200 },
+    // Nuevos parámetros para generación procedural
+    spawnHeight: { type: 'number', default: 2 },
+    spawnHeightVariation: { type: 'number', default: 1.5 },
+    flightDistance: { type: 'number', default: 15 } // Distancia que recorre antes de desaparecer
   },
 
   init: function () {
@@ -15,12 +17,15 @@ AFRAME.registerComponent('target-logic', {
     this.isActiveInFlight = false;
 
     this.velocity = new THREE.Vector3();
-    this.tempDirection = new THREE.Vector3();
+    this.startPosition = new THREE.Vector3();
+    this.targetPosition = new THREE.Vector3();
+    this.currentDistance = 0;
 
-    this.setPositionBehindBooth();
+    // Posición inicial fuera de vista
+    this.generateFlightPath();
     this.scheduleActivation();
 
-    // El disparo no llama métodos directos del target; llega por evento para mantener bajo acoplamiento.
+    // El disparo no llama métodos directos del target
     this.el.addEventListener('hit-by-shot', this.onHitByShot.bind(this));
   },
 
@@ -36,21 +41,97 @@ AFRAME.registerComponent('target-logic', {
     var deltaSeconds = deltaMs / 1000;
     var currentPosition = this.el.object3D.position;
 
+    // Mover el ave en línea recta hacia su objetivo
     currentPosition.addScaledVector(this.velocity, deltaSeconds);
+    this.currentDistance += this.data.speed * deltaSeconds;
 
-    this.handleInvisibleWallBounce(currentPosition);
+    // Rotar el ave en la dirección del movimiento
+    this.updateRotation();
+
+    // Verificar si llegó a su destino o salió del área
+    if (this.currentDistance >= this.data.flightDistance || this.isOutOfBounds(currentPosition)) {
+      this.despawnAndRespawn();
+    }
   },
 
-  setPositionBehindBooth: function () {
-    var center = this.data.hiddenSpawnCenter;
-    var randomAngle = Math.random() * Math.PI * 2;
-    var randomRadius = Math.random() * this.data.hiddenSpawnRadius;
-
-    var spawnX = center.x + Math.cos(randomAngle) * randomRadius;
-    var spawnY = center.y + (Math.random() * 0.5 - 0.25);
-    var spawnZ = center.z + Math.sin(randomAngle) * randomRadius;
-
-    this.el.setAttribute('position', { x: spawnX, y: spawnY, z: spawnZ });
+  generateFlightPath: function () {
+    var min = this.data.movementAreaMin;
+    var max = this.data.movementAreaMax;
+    
+    // Tipos de trayectorias: 0=izq a der, 1=der a izq, 2=atrás a adelante, 3=diagonal
+    var pathType = Math.floor(Math.random() * 4);
+    
+    var startX, startY, startZ;
+    var endX, endY, endZ;
+    
+    // Altura aleatoria para esta trayectoria
+    var flightHeight = this.data.spawnHeight + (Math.random() - 0.5) * this.data.spawnHeightVariation;
+    flightHeight = THREE.MathUtils.clamp(flightHeight, min.y, max.y);
+    
+    switch(pathType) {
+      case 0: // Izquierda a Derecha
+        startX = min.x - 3;
+        startZ = min.z + Math.random() * (max.z - min.z);
+        startY = flightHeight + (Math.random() - 0.5) * 0.5;
+        
+        endX = max.x + 3;
+        endZ = startZ + (Math.random() - 0.5) * 4; // Ligera desviación en Z
+        endY = flightHeight + (Math.random() - 0.5);
+        break;
+        
+      case 1: // Derecha a Izquierda
+        startX = max.x + 3;
+        startZ = min.z + Math.random() * (max.z - min.z);
+        startY = flightHeight + (Math.random() - 0.5) * 0.5;
+        
+        endX = min.x - 3;
+        endZ = startZ + (Math.random() - 0.5) * 4;
+        endY = flightHeight + (Math.random() - 0.5);
+        break;
+        
+      case 2: // Atrás hacia Adelante (más común en Duck Hunt)
+        startX = (Math.random() - 0.5) * (max.x - min.x);
+        startZ = min.z - 4;
+        startY = flightHeight;
+        
+        endX = startX + (Math.random() - 0.5) * 6; // Desviación lateral
+        endZ = max.z + 2;
+        endY = flightHeight + (Math.random() - 0.5) * 1.5;
+        break;
+        
+      case 3: // Diagonal (mezcla de lateral + profundidad)
+        if (Math.random() > 0.5) {
+          // Diagonal desde atrás-izquierda a adelante-derecha
+          startX = min.x - 2;
+          startZ = min.z - 3;
+          endX = max.x + 2;
+          endZ = max.z + 1;
+        } else {
+          // Diagonal desde atrás-derecha a adelante-izquierda
+          startX = max.x + 2;
+          startZ = min.z - 3;
+          endX = min.x - 2;
+          endZ = max.z + 1;
+        }
+        startY = flightHeight;
+        endY = flightHeight + (Math.random() - 0.5) * 1;
+        break;
+    }
+    
+    // Establecer posiciones
+    this.startPosition.set(startX, startY, startZ);
+    this.targetPosition.set(endX, endY, endZ);
+    this.el.setAttribute('position', this.startPosition);
+    
+    // Calcular velocidad como vector unitario * velocidad
+    this.velocity.copy(this.targetPosition).sub(this.startPosition).normalize();
+    this.velocity.multiplyScalar(this.data.speed);
+    
+    // Resetear distancia recorrida
+    this.currentDistance = 0;
+    
+    // Guardar el tipo de trayectoria para debug
+    this.pathType = pathType;
   },
 
   scheduleActivation: function () {
@@ -64,58 +145,46 @@ AFRAME.registerComponent('target-logic', {
         return;
       }
 
+      // Generar nueva trayectoria aleatoria
+      self.generateFlightPath();
       self.el.setAttribute('visible', true);
       self.isActiveInFlight = true;
-      self.pickRandomDirection();
     }, this.data.respawnDelay);
   },
 
-  pickRandomDirection: function () {
-    this.tempDirection.set(
-      Math.random() * 2 - 1,
-      (Math.random() * 2 - 1) * 0.35,
-      Math.random() * 2 - 1
-    );
-
-    if (this.tempDirection.lengthSq() < 0.001) {
-      this.tempDirection.set(1, 0, 0);
-    }
-
-    this.tempDirection.normalize();
-    this.velocity.copy(this.tempDirection).multiplyScalar(this.data.speed);
-  },
-
-  handleInvisibleWallBounce: function (position) {
+  isOutOfBounds: function (position) {
     var min = this.data.movementAreaMin;
     var max = this.data.movementAreaMax;
+    
+    // Márgenes más amplios para permitir que el ave salga completamente
+    return (
+      position.x < min.x - 5 || position.x > max.x + 5 ||
+      position.z < min.z - 6 || position.z > max.z + 4 ||
+      position.y < min.y - 3 || position.y > max.y + 3
+    );
+  },
 
-    var bounced = false;
+  despawnAndRespawn: function () {
+    // El ave completó su trayectoria o salió del área
+    this.isActiveInFlight = false;
+    this.el.setAttribute('visible', false);
+    
+    // Programar nueva aparición con nueva trayectoria
+    this.scheduleActivation();
+  },
 
-    if (position.x <= min.x || position.x >= max.x) {
-      this.velocity.x *= -1;
-      position.x = THREE.MathUtils.clamp(position.x, min.x, max.x);
-      bounced = true;
-    }
-
-    if (position.y <= min.y || position.y >= max.y) {
-      this.velocity.y *= -1;
-      position.y = THREE.MathUtils.clamp(position.y, min.y, max.y);
-      bounced = true;
-    }
-
-    if (position.z <= min.z || position.z >= max.z) {
-      this.velocity.z *= -1;
-      position.z = THREE.MathUtils.clamp(position.z, min.z, max.z);
-      bounced = true;
-    }
-
-    if (bounced) {
-      // Pequeña variación para evitar patrones rígidos de rebote.
-      this.velocity.x += (Math.random() - 0.5) * 0.2;
-      this.velocity.y += (Math.random() - 0.5) * 0.1;
-      this.velocity.z += (Math.random() - 0.5) * 0.2;
-      this.velocity.normalize().multiplyScalar(this.data.speed);
-    }
+  updateRotation: function () {
+    // Rotar el ave para que mire en la dirección de su movimiento
+    var direction = this.velocity.clone().normalize();
+    
+    // Calcular ángulo de rotación en Y (horizontal)
+    var angleY = Math.atan2(direction.x, direction.z);
+    
+    // Calcular ángulo de rotación en X (pitch) para inclinación
+    var angleX = Math.asin(-direction.y);
+    
+    // Aplicar rotación suave
+    this.el.object3D.rotation.set(angleX * 0.3, angleY, 0);
   },
 
   onHitByShot: function () {
@@ -123,14 +192,55 @@ AFRAME.registerComponent('target-logic', {
       return;
     }
 
-    this.isAlive = false;
-    this.isActiveInFlight = false;
-    this.el.setAttribute('visible', false);
+    console.log('Ave ' + this.el.id + ' impactada!');
 
+    // Marcar como golpeada inmediatamente
+    this.isActiveInFlight = false;
+    
+    // Efecto visual: hacer que el ave "caiga" antes de desaparecer
+    this.playHitAnimation();
+    
+    // Registrar el hit en el sistema de juego
     if (this.gameSystem) {
       this.gameSystem.registerTargetHit(this.el);
     }
 
     this.el.emit('target-dead', { id: this.el.id });
+
+    // Desaparecer después de una breve animación
+    var self = this;
+    setTimeout(function() {
+      self.el.setAttribute('visible', false);
+      // Programar respawn con nueva trayectoria
+      self.scheduleActivation();
+    }, 300);
+  },
+
+  playHitAnimation: function () {
+    // Animación simple de caída cuando el ave es golpeada
+    var currentRotation = this.el.object3D.rotation;
+    var currentPosition = this.el.object3D.position;
+    
+    // Hacer que el ave "caiga" rotando
+    var fallDuration = 300;
+    var startTime = performance.now();
+    var self = this;
+    var initialY = currentPosition.y;
+    
+    var animateFall = function() {
+      var elapsed = performance.now() - startTime;
+      var progress = Math.min(elapsed / fallDuration, 1);
+      
+      if (progress < 1 && self.isAlive) {
+        // Rotar el ave como si cayera
+        currentRotation.z = progress * Math.PI;
+        // Mover ligeramente hacia abajo
+        currentPosition.y = initialY - (progress * 2);
+        
+        requestAnimationFrame(animateFall);
+      }
+    };
+    
+    animateFall();
   }
 });
