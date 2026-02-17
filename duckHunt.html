@@ -10,9 +10,10 @@
     <script src="./js/target-logic.js"></script>
     <script src="./js/hud-logic.js"></script>
     <script src="./js/weapon-logic.js"></script>
+    <script src="./js/menu-button.js"></script>
   </head>
   <body>
-    <a-scene background="color: #87ceeb" game-manager="roundTime: 90; bulletsPerBird: 3; totalBirds: 3">
+    <a-scene background="color: #87ceeb" game-manager="roundTime: 90; bulletsPerBird: 3; totalBirds: 3" menu-button>
       <a-sky src="./src/mapas/bosque.jpg"></a-sky>
       <a-assets>
         <a-asset-item id="booth-model" src="./src/mapas/splatoon_3_dj_booth.glb"></a-asset-item>
@@ -30,55 +31,92 @@
       <a-entity id="dj-booth" gltf-model="#booth-model" position="0 0 -3" scale="2.6 2.6 2.6"></a-entity>
 
       <!--
-        Los targets usan el mismo componente reusable target-logic.
-        Cada entidad vive de forma autónoma y se comunica con el estado global por eventos/sistema.
+        Sistema de generación procedural de aves:
+        - Cada ave tiene una trayectoria única (punto A a punto B)
+        - Sin rebotes: van en línea recta
+        - Al completar la trayectoria, desaparecen y se regeneran con nueva ruta
+        - Diferentes velocidades y tiempos para mayor variedad
+        - Hitbox invisible para detectar disparos
       -->
       <a-entity
         id="bird-1"
         class="target"
-        gltf-model="#black-bird-model"
         target-logic="
-          movementAreaMin: -8 1 -10;
-          movementAreaMax: 8 6 -5;
-          hiddenSpawnCenter: 0 1.5 -9;
-          hiddenSpawnRadius: 1.5;
-          speed: 2.4;
-          respawnDelay: 3000;
+          movementAreaMin: -10 1.5 -12;
+          movementAreaMax: 10 7 -2;
+          speed: 2.5;
+          respawnDelay: 1500;
+          spawnHeight: 3.5;
+          spawnHeightVariation: 2;
+          flightDistance: 18;
         "
-      ></a-entity>
+        scale="1 1 1"
+      >
+        <a-entity gltf-model="#black-bird-model"></a-entity>
+        <a-box 
+          class="bird-hitbox"
+          width="0.8" 
+          height="0.6" 
+          depth="0.8" 
+          opacity="0"
+          material="transparent: true; opacity: 0"
+        ></a-box>
+      </a-entity>
 
       <a-entity
         id="bird-2"
         class="target"
-        gltf-model="#red-bird-model"
         target-logic="
-          movementAreaMin: -8 1 -10;
-          movementAreaMax: 8 6 -5;
-          hiddenSpawnCenter: 0 1.5 -9;
-          hiddenSpawnRadius: 1.5;
-          speed: 2.0;
-          respawnDelay: 1500;
+          movementAreaMin: -10 1.5 -12;
+          movementAreaMax: 10 7 -2;
+          speed: 3.0;
+          respawnDelay: 2000;
+          spawnHeight: 4;
+          spawnHeightVariation: 2.5;
+          flightDistance: 20;
         "
-      ></a-entity>
+        scale="1 1 1"
+      >
+        <a-entity gltf-model="#red-bird-model"></a-entity>
+        <a-box 
+          class="bird-hitbox"
+          width="0.8" 
+          height="0.6" 
+          depth="0.8" 
+          opacity="0"
+          material="transparent: true; opacity: 0"
+        ></a-box>
+      </a-entity>
 
       <a-entity
         id="bird-3"
         class="target"
-        gltf-model="#yellow-bird-model"
         target-logic="
-          movementAreaMin: -8 1 -10;
-          movementAreaMax: 8 6 -5;
-          hiddenSpawnCenter: 0 1.5 -9;
-          hiddenSpawnRadius: 1.5;
-          speed: 2.7;
-          respawnDelay: 1800;
+          movementAreaMin: -10 1.5 -12;
+          movementAreaMax: 10 7 -2;
+          speed: 3.5;
+          respawnDelay: 2500;
+          spawnHeight: 3;
+          spawnHeightVariation: 2;
+          flightDistance: 22;
         "
-      ></a-entity>
+        scale="1 1 1"
+      >
+        <a-entity gltf-model="#yellow-bird-model"></a-entity>
+        <a-box 
+          class="bird-hitbox"
+          width="0.8" 
+          height="0.6" 
+          depth="0.8" 
+          opacity="0"
+          material="transparent: true; opacity: 0"
+        ></a-box>
+      </a-entity>
 
       <a-entity id="rig" position="0 1.6 0">
         <a-camera>
 
-          <a-cursor fuse="true" fuse-timeout="700"></a-cursor>
+          <a-cursor fuse="true" fuse-timeout="700" raycaster="objects: .target, .bird-hitbox; far: 50"></a-cursor>
           <!-- HUD mínimo en pantalla, desacoplado vía eventos del sistema global -->
           <a-entity id="hud" hud-logic position="1.2 0.8 -1.15" scale="0.95 0.95 0.95">
             <a-plane
@@ -96,6 +134,8 @@
             <a-text id="hud-status" value="" color="#ffeb3b" width="1.8" position="0 -0.3 0" align="left" anchor="left"></a-text>
           </a-entity>
 
+
+
           <!--
             El arma es hija de cámara para mantener alineación con la vista.
             weapon-logic consulta game-manager (system) para gastar munición sin acoplarse a targets concretos.
@@ -106,7 +146,7 @@
             rotation="0 -10 0"
             scale="0.06 0.06 0.06"
             gltf-model="#weapon-model"
-            raycaster="objects: .target; far: 40"
+            raycaster="objects: .target, .bird-hitbox; far: 50; showLine: false"
             weapon-logic="shootCooldown: 250; maxVisualSize: 0.22"
           ></a-entity>
         </a-camera>
