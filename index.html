@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Duck Hunt VR - Title Screen</title>
+
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="./js/title-screen.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: black;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+      }
+      a-scene {
+        width: 100%;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <a-scene background="color: #000000" title-screen>
+      <a-entity light="type: ambient; intensity: 1"></a-entity>
+
+      <a-entity id="rig" position="0 1.6 0">
+        <a-camera></a-camera>
+        <a-cursor 
+          id="cursor"
+          fuse="true" 
+          fuse-timeout="500"
+          raycaster="objects: .clickable"
+          color="#FFFF00"
+        ></a-cursor>
+        
+        <!-- TITLE SCREEN CONTAINER -->
+        <a-entity id="title-container" position="0 0 -3">
+          
+          <!-- DUCK HUNT TITLE -->
+          <a-text
+            id="duck-title"
+            value="DUCK"
+            color="#33FFFF"
+            width="9"
+            position="0 1.8 0"
+            align="center"
+            anchor="center"
+            font="kelsonsans"
+            scale="1.5 1.5 1.5"
+          ></a-text>
+          
+          <a-plane
+            width="3.2"
+            height="0.04"
+            color="#FF9933"
+            position="0 1.3 0"
+          ></a-plane>
+
+          <a-text
+            id="hunt-title"
+            value="HUNT"
+            color="#33FFFF"
+            width="9"
+            position="0 0.8 0"
+            align="center"
+            anchor="center"
+            font="kelsonsans"
+            scale="1.5 1.5 1.5"
+          ></a-text>
+          
+          <!-- GAME OPTIONS MENU -->
+          
+          <!-- GAME A (INTERACTIVE) -->
+          <!-- Triangle Cursor -->
+          <a-entity position="-0.8 0.1 0" rotation="0 0 -90">
+            <a-triangle
+              color="#FFFFFF"
+              vertex-a="0 0.05 0"
+              vertex-b="-0.05 -0.05 0"
+              vertex-c="0.05 -0.05 0"
+              scale="0.5 0.5 0.5"
+            ></a-triangle>
+          </a-entity>
+
+          <a-text
+            id="label-a"
+            value="GAME A"
+            color="#FF9933"
+            width="4"
+            position="-0.3 0.1 0"
+            align="right"
+            anchor="right"
+            font="monoid"
+          ></a-text>
+          <a-text
+            id="desc-a"
+            value="1 DUCK"
+            color="#FF9933"
+            width="4"
+            position="0.2 0.1 0"
+            align="left"
+            anchor="left"
+            font="monoid"
+          ></a-text>
+          
+          <!-- Clickable box for GAME A (invisible) -->
+          <a-box
+            id="game-a-box"
+            class="clickable"
+            width="2.5"
+            height="0.3"
+            depth="0.1"
+            color="#FF880000"
+            position="0 0.1 0"
+            cursor-listener
+          ></a-box>
+
+          <!-- GAME B -->
+          <a-text
+            value="GAME B"
+            color="#FF9933"
+            width="4"
+            position="-0.3 -0.2 0"
+            align="right"
+            anchor="right"
+            font="monoid"
+          ></a-text>
+          <a-text
+            value="2 DUCKS"
+            color="#FF9933"
+            width="4"
+            position="0.2 -0.2 0"
+            align="left"
+            anchor="left"
+            font="monoid"
+          ></a-text>
+
+          <!-- GAME C -->
+          <a-text
+            value="GAME C"
+            color="#FF9933"
+            width="4"
+            position="-0.3 -0.5 0"
+            align="right"
+            anchor="right"
+            font="monoid"
+          ></a-text>
+          <a-text
+            value="CLAY SHOOTING"
+            color="#FF9933"
+            width="4"
+            position="0.2 -0.5 0"
+            align="left"
+            anchor="left"
+            font="monoid"
+          ></a-text>
+
+          <!-- TOP SCORE -->
+          <a-text
+            id="top-score-text"
+            value="TOP SCORE = 0"
+            color="#66FF33"
+            width="4"
+            position="0 -1.0 0"
+            align="center"
+            anchor="center"
+            font="monoid"
+          ></a-text>
+
+          <!-- COPYRIGHT -->
+          <a-text
+            id="copyright-text"
+            value="c 2026 SOFTWARE SYSTEMS CO.,LTD."
+            color="#FFFFFF"
+            width="4"
+            position="0 -1.5 0"
+            align="center"
+            anchor="center"
+            font="monoid"
+            scale="0.6 0.6 0.6"
+          ></a-text>
+
+          <!-- DUCK ICON (SMALL DECORATION in top left) -->
+          <a-text
+            id="duck-icon"
+            value="🦆"
+            position="-1.8 1.2 0"
+            scale="1.2 1.2 1.2"
+            align="center"
+          ></a-text>
+        </a-entity>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
