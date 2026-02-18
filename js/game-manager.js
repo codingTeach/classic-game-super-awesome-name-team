@@ -1,28 +1,34 @@
-/**
- * game-manager — Sistema central de lógica Duck Hunt VR con NIVELES.
- *
- * Modelo de juego:
- *   - Niveles progresivos (1 → 2 → 3) con dificultad creciente
- *   - Un pájaro a la vez, 3 balas por pájaro
- *   - Timer por NIVEL — NO se reinicia por disparos, spawns ni eventos
- *   - Matar N pájaros por nivel  → avanzar al siguiente nivel
- *   - Fallar 3 pájaros (escapan) → Foxy jumpscare → GAME OVER
- *   - Tiempo agotado             → GAME OVER
- *   - Completar todos los niveles → ¡VICTORIA!
- *
- * Dificultad:
- *   Nivel 1 — velocidad 1.0×, 60 s, pausa 1.5 s entre aves
- *   Nivel 2 — velocidad 1.4×, 55 s, pausa 1.2 s
- *   Nivel 3 — velocidad 1.8×, 50 s, pausa 0.9 s
- *
- * Eventos emitidos:
- *   game-waiting, round-started, spawn-bird, despawn-bird,
- *   game-state-changed, target-hit, bird-missed, shot-missed,
- *   ammo-changed, level-complete, game-over
- *
- * Eventos escuchados:
- *   bird-escaped  →  emitido por target-logic
- */
+// Configuración y documentación del sistema de juego
+const GAME_SYSTEM_INFO = {
+  name: 'game-manager',
+  description: 'Sistema central de lógica Duck Hunt VR con NIVELES',
+  gameModel: {
+    levels: '1 → 2 → 3 (progresivos con dificultad creciente)',
+    birdsPerShot: 3,
+    birdPerRound: 1,
+    timerType: 'Por NIVEL (NO se reinicia por disparos, spawns ni eventos)',
+    levelAdvance: 'Matar N pájaros por nivel → avanzar al siguiente nivel',
+    gameover: [
+      'Fallar 3 pájaros (escapan) → Foxy jumpscare → GAME OVER',
+      'Tiempo agotado → GAME OVER'
+    ],
+    victory: 'Completar todos los niveles → ¡VICTORIA!'
+  },
+  levelConfigs: {
+    1: { speed: '1.0x (normal)', time: '60 segundos', spawnDelay: '1.5s entre aves' },
+    2: { speed: '1.4x (40% más rápido)', time: '55 segundos', spawnDelay: '1.2s entre aves' },
+    3: { speed: '1.8x (80% más rápido)', time: '50 segundos', spawnDelay: '0.9s entre aves' }
+  },
+  events: {
+    emitted: [
+      'game-waiting', 'round-started', 'spawn-bird', 'despawn-bird',
+      'game-state-changed', 'target-hit', 'bird-missed', 'shot-missed',
+      'ammo-changed', 'level-complete', 'game-over'
+    ],
+    listened: 'bird-escaped → emitido por target-logic cuando el ave sale del escenario'
+  }
+};
+
 AFRAME.registerSystem('game-manager', {
   schema: {
     bulletsPerBird: { type: 'number', default: 3 },

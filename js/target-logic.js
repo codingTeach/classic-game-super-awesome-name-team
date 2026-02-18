@@ -94,7 +94,9 @@ AFRAME.registerComponent('target-logic', {
     var effectiveSpeed  = this.data.speed * this.currentSpeedMultiplier;
 
     // Mover en línea recta con velocidad escalada por nivel
-    currentPosition.addScaledVector(this.velocity, deltaSeconds);
+    // Recalcular velocidad cada frame para asegurar que el multiplicador se aplique
+    var direction = this.velocity.clone().normalize();
+    currentPosition.addScaledVector(direction, effectiveSpeed * deltaSeconds);
     this.currentDistance += effectiveSpeed * deltaSeconds;
 
     // Rotar hacia la dirección de vuelo
@@ -164,8 +166,8 @@ AFRAME.registerComponent('target-logic', {
     this.targetPosition.set(endX, endY, endZ);
     this.el.object3D.position.copy(this.startPosition);
 
+    // Velocidad como vector de dirección normalizado (sin escala de velocidad)
     this.velocity.copy(this.targetPosition).sub(this.startPosition).normalize();
-    this.velocity.multiplyScalar(this.data.speed * this.currentSpeedMultiplier);
     this.currentDistance = 0;
   },
 

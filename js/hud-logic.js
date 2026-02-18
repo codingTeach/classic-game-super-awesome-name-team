@@ -76,6 +76,10 @@ AFRAME.registerComponent('hud-logic', {
   },
 
   onStateChanged: function (event) {
+    // Mantener el HUD visible incluso cuando cambia de nivel
+    if (event.detail && event.detail.roundIsActive) {
+      this.el.setAttribute('visible', true);
+    }
     this.render(event.detail);
   },
 
@@ -96,13 +100,20 @@ AFRAME.registerComponent('hud-logic', {
   onLevelComplete: function (event) {
     if (!this.levelFlash) return;
     var lvl = event.detail && event.detail.level ? event.detail.level : '?';
-    this.levelFlash.setAttribute('value', 'NIVEL ' + lvl + ' COMPLETO!');
+    var nextLvl = event.detail && event.detail.nextLevel ? event.detail.nextLevel : '?';
+    var message = '¡NIVEL ' + lvl + ' COMPLETO! → NIVEL ' + nextLvl;
+    
+    console.log('Level complete event:', event.detail);
+    console.log('Mostrando flash:', message);
+    
+    this.levelFlash.setAttribute('value', message);
     this.levelFlash.setAttribute('visible', true);
+    
     var self = this;
     if (this._levelTimeout) clearTimeout(this._levelTimeout);
     this._levelTimeout = setTimeout(function () {
       if (self.levelFlash) self.levelFlash.setAttribute('visible', false);
-    }, 2200);
+    }, 2500);
   },
 
   /* ── Renderizar datos del snapshot ──────────────────────────────────── */
