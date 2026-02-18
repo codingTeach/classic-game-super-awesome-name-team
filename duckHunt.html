@@ -25,10 +25,16 @@
         <a-asset-item id="red-bird-model" src="./src/personajes/red_bird.glb"></a-asset-item>
         <a-asset-item id="yellow-bird-model" src="./src/personajes/yellowBird.glb"></a-asset-item>
         <a-asset-item id="foxy-model" src="./src/personajes/foxy.glb"></a-asset-item>
+        <audio id="bg-audio" src="./src/sounds/bg.mp3" preload="auto" loop></audio>
+        <audio id="laser-audio" src="./src/sounds/laser.mp3" preload="auto"></audio>
+        <audio id="foxy-audio" src="./src/sounds/foxy.mp3" preload="auto"></audio>
       </a-assets>
 
       <a-entity light="type: ambient; intensity: 0.7"></a-entity>
       <a-entity light="type: directional; intensity: 0.9" position="2 6 4"></a-entity>
+
+      <!-- Background Music -->
+      <a-entity sound="src: #bg-audio; loop: true; volume: 0.8; autoplay: true"></a-entity>
 
       <a-plane rotation="-90 0 0" width="60" height="60" src="./src/mapas/nieve.jpg" body="type: static"></a-plane>
 

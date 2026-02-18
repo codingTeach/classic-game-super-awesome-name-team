@@ -184,6 +184,13 @@ AFRAME.registerComponent('hud-logic', {
 
     this.screamerEntity.setAttribute('visible', 'true');
 
+    // Reproducir sonido de Foxy desde el segundo 1
+    var foxyAudio = document.getElementById('foxy-audio');
+    if (foxyAudio) {
+      foxyAudio.currentTime = 1;
+      foxyAudio.play();
+    }
+
     var component = this.screamerEntity.components['foxy-animation'];
     if (component && component.playJumpscare) {
       setTimeout(function () {

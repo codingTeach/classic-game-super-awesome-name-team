@@ -309,7 +309,12 @@ AFRAME.registerComponent('weapon-logic', {
   },
 
   playShotSoundPlaceholder: function () {
-    // Placeholder de sonido: desde aquí puedes conectar WebAudio o un <a-sound>.
+    // Reproducir sonido de laser
+    var laserAudio = document.getElementById('laser-audio');
+    if (laserAudio) {
+      laserAudio.currentTime = 0;
+      laserAudio.play();
+    }
     this.el.emit('weapon-shot-sfx');
   },
 
