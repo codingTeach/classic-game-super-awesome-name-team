@@ -117,6 +117,33 @@ AFRAME.registerSystem('game-manager', {
 
   restartGame: function () { this.beginGame(); },
 
+  returnToMenu: function () {
+    this.waitingForStart      = true;
+    this.roundIsActive        = false;
+    this.gameOver             = false;
+
+    this.level                = 1;
+    this.score                = 0;
+    this.birdsKilledThisLevel = 0;
+    this.totalBirdsKilled     = 0;
+    this.birdsMissed          = 0;
+    this.bulletsLeft          = 0;
+    this.currentBirdAlive     = false;
+    this.levelTimeLeft        = 0;
+    this.activeBirdId         = null;
+    this.speedMultiplier      = 1.0;
+    this._lastTimeMs          = performance.now();
+
+    if (this._spawnTimeout) { clearTimeout(this._spawnTimeout); this._spawnTimeout = null; }
+
+    for (var i = 0; i < this._birdIds.length; i++) {
+      this.el.emit('despawn-bird', { birdId: this._birdIds[i] });
+    }
+
+    this.el.emit('game-waiting', this.getSnapshot());
+    this.el.emit('game-state-changed', this.getSnapshot());
+  },
+
   startLevel: function (lvl) {
     this.level                = lvl;
     this.birdsKilledThisLevel = 0;

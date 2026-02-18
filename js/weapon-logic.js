@@ -90,8 +90,8 @@ AFRAME.registerComponent('weapon-logic', {
   },
 
   onShootInput: function (event) {
-    // Solo botón izquierdo del ratón
-    if (event && event.type === 'mousedown' && event.button !== 0) return;
+    // Disparo con mouse desactivado (incluye clic izquierdo)
+    if (event && event.type === 'mousedown') return;
 
     // Evitar doble disparo touch→mousedown sintético
     var now = performance.now();

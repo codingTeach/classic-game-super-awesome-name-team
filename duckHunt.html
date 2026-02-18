@@ -127,8 +127,17 @@
         ></a-box>
       </a-entity>
 
-      <a-entity id="rig" position="0 1.6 0">
-        <a-camera look-controls="pointerLockEnabled: true">
+      <a-entity id="rig" position="0 1.6 1.9">
+        <a-box
+          id="player-boundary"
+          width="3"
+          height="2.6"
+          depth="3"
+          position="0 0 0"
+          visible="false"
+        ></a-box>
+
+        <a-camera look-controls="pointerLockEnabled: true" wasd-controls="enabled: false">
 
           <!--
             Retícula VR visible + cursor con fuse para menús.
@@ -140,7 +149,7 @@
             id="vr-cursor"
             cursor="rayOrigin: entity; fuse: true; fuseTimeout: 1500"
             raycaster="objects: .bird-hitbox, .clickable; far: 50"
-            position="0 0 -0.8"
+            position="0 0 -0.4"
             geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.008"
             material="color: #FFFFFF; shader: flat; opacity: 0.85; transparent: true"
           ></a-entity>
@@ -241,7 +250,7 @@
                MENÚ DE INICIO
                Visible al cargar. Se oculta al presionar "Jugar".
           ════════════════════════════════════════════ -->
-          <a-entity id="start-menu" position="0 0 -2.8" visible="true">
+          <a-entity id="start-menu" position="0 0 -1.25" scale="0.45 0.45 0.45" visible="true">
             <!-- Panel de fondo del menú -->
             <a-plane
               width="4.2" height="3.8"

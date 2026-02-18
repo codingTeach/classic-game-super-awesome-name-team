@@ -96,6 +96,14 @@ AFRAME.registerComponent('game-ui', {
         }
         break;
 
+      case 'playing':
+        // ESCAPE → Menú principal sin salir de la escena
+        if (event.code === 'Escape') {
+          event.preventDefault();
+          this.onMenuClicked();
+        }
+        break;
+
       // 'playing' → no interceptar teclas (Space ya dispara en weapon-logic)
     }
   },
@@ -119,7 +127,14 @@ AFRAME.registerComponent('game-ui', {
     this.gameSystem.restartGame();
   },
 
-  onMenuClicked: function () { window.location.href = './index.html'; },
+  onMenuClicked: function () {
+    this._uiState = 'menu';
+    this.hideGameover();
+    this.showStartMenu();
+    if (this.gameSystem && this.gameSystem.returnToMenu) {
+      this.gameSystem.returnToMenu();
+    }
+  },
 
   // ── Eventos del sistema ────────────────────────────────────────────────────
 
