@@ -7,10 +7,16 @@
  *  3. Gestionar Foxy jumpscare cuando el jugador pierde.
  *  4. Alternar fuse del cursor VR (menú ↔ juego).
  *  5. Conectar botones "Jugar", "Reiniciar" y "Menú" con game-manager.
+ *  6. Teclado: ENTER = Jugar, R = Reiniciar, ESC = Menú.
  */
 AFRAME.registerComponent('game-ui', {
   init: function () {
     var self = this;
+
+    // Estado de UI para el teclado
+    this._uiState    = 'menu';     // 'menu' | 'playing' | 'gameover'
+    this._readyTime  = 0;          // Prevenir click accidental al primer clic (pointer lock)
+
     if (this.el.hasLoaded) {
       setTimeout(function () { self.setup(); }, 200);
     } else {
@@ -34,10 +40,19 @@ AFRAME.registerComponent('game-ui', {
 
     this.updateTopScore();
 
+    // El botón no responde clicks durante 1.5 s para evitar que el pointer-lock
+    // auto-dispare el "Jugar" al primer clic del usuario.
+    this._readyTime = performance.now() + 1500;
+
     // Botones interactivos
     this.setupButton('play-btn-bg',     '#FF6600', this.onPlayClicked.bind(this));
     this.setupButton('restart-btn-box', '#3b82f6',  this.onRestartClicked.bind(this));
     this.setupButton('menu-btn-box',    '#FF6B6B',  this.onMenuClicked.bind(this));
+
+    // ── Teclado global: ENTER, R, ESCAPE ──
+    var self = this;
+    this._boundKeyHandler = function (e) { self.onKeyDown(e); };
+    window.addEventListener('keydown', this._boundKeyHandler);
 
     // Eventos del sistema de juego
     var scene = this.el;
@@ -46,14 +61,52 @@ AFRAME.registerComponent('game-ui', {
     scene.addEventListener('round-started', this.onRoundStarted.bind(this));
 
     // Estado inicial
+    this._uiState = 'menu';
     this.showStartMenu();
     this.hideGameover();
+  },
+
+  // ── Teclado ────────────────────────────────────────────────────────────────
+
+  onKeyDown: function (event) {
+    switch (this._uiState) {
+      case 'menu':
+        // ENTER o SPACE → Jugar
+        if (event.code === 'Enter' || event.code === 'Space') {
+          event.preventDefault();
+          this.onPlayClicked();
+        }
+        break;
+
+      case 'gameover':
+        // R → Reiniciar
+        if (event.code === 'KeyR') {
+          event.preventDefault();
+          this.onRestartClicked();
+        }
+        // ESCAPE → Menú principal
+        if (event.code === 'Escape') {
+          event.preventDefault();
+          this.onMenuClicked();
+        }
+        // ENTER → Reiniciar (alternativa)
+        if (event.code === 'Enter') {
+          event.preventDefault();
+          this.onRestartClicked();
+        }
+        break;
+
+      // 'playing' → no interceptar teclas (Space ya dispara en weapon-logic)
+    }
   },
 
   // ── Botones ────────────────────────────────────────────────────────────────
 
   onPlayClicked: function () {
     if (!this.gameSystem) return;
+    // Ignorar clicks durante el primer 1.5 s (evitar pointer-lock accidental)
+    if (performance.now() < this._readyTime) return;
+    this._uiState = 'playing';
     this.hideStartMenu();
     this.hideGameover();
     this.gameSystem.beginGame();
@@ -61,6 +114,7 @@ AFRAME.registerComponent('game-ui', {
 
   onRestartClicked: function () {
     if (!this.gameSystem) return;
+    this._uiState = 'playing';
     this.hideGameover();
     this.gameSystem.restartGame();
   },
@@ -70,11 +124,13 @@ AFRAME.registerComponent('game-ui', {
   // ── Eventos del sistema ────────────────────────────────────────────────────
 
   onGameWaiting: function () {
+    this._uiState = 'menu';
     this.showStartMenu();
     this.hideGameover();
   },
 
   onRoundStarted: function () {
+    this._uiState = 'playing';
     this.hideStartMenu();
     this.hideGameover();
     this.setFuse(false);    // Desactivar fuse durante el juego
@@ -134,6 +190,7 @@ AFRAME.registerComponent('game-ui', {
     }
 
     this.updateTopScore();
+    this._uiState = 'gameover';
 
     // Foxy jumpscare para cualquier derrota (no para victoria)
     if (reason !== 'win') {

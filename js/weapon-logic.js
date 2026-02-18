@@ -83,6 +83,8 @@ AFRAME.registerComponent('weapon-logic', {
 
   onKeyboardShoot: function (event) {
     if (event.code === 'Space') {
+      // No disparar si estamos en menú o game-over
+      if (!this.gameSystem || !this.gameSystem.roundIsActive || this.gameSystem.gameOver) return;
       this.onShootInput();
     }
   },
