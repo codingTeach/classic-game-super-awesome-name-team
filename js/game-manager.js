@@ -102,6 +102,12 @@ AFRAME.registerSystem('game-manager', {
     this.roundIsActive = false;
     this.gameOver = true;
 
+    // Save top score to localStorage
+    var currentTopScore = localStorage.getItem('duckHuntTopScore') || '0';
+    if (this.score > parseInt(currentTopScore)) {
+      localStorage.setItem('duckHuntTopScore', this.score.toString());
+    }
+
     this.el.emit('game-over', {
       reason: reason,
       finalState: this.getSnapshot()
