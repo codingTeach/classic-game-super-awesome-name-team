@@ -168,7 +168,7 @@ AFRAME.registerComponent('hud-logic', {
     this.screamerEntity = document.createElement('a-entity');
     this.screamerEntity.setAttribute('id', 'foxy-screamer');
     this.screamerEntity.setAttribute('gltf-model', '#foxy-model');
-    this.screamerEntity.setAttribute('position', '-0.2 0 -0.32');
+    this.screamerEntity.setAttribute('position', '0 0 -0.42');
     this.screamerEntity.setAttribute('rotation', '0 -5 0');
     this.screamerEntity.setAttribute('scale', '0.4 0.4 0.4');
     this.screamerEntity.setAttribute('foxy-animation', 'clip: Jumpscare; loop: once');
@@ -183,19 +183,23 @@ AFRAME.registerComponent('hud-logic', {
     }
 
     this.screamerEntity.setAttribute('visible', 'true');
-    
-    // Reproducir la animación
+
     var component = this.screamerEntity.components['foxy-animation'];
-    if (component && component.playClip) {
-      var self = this;
-      setTimeout(function() {
-        component.playClip('Jumpscare');
-      }, 100);
+    if (component && component.playJumpscare) {
+      setTimeout(function () {
+        component.playJumpscare();
+      }, 50);
     }
   },
 
   hideScreamer: function () {
     if (!this.screamerEntity) {
+      return;
+    }
+
+    var component = this.screamerEntity.components['foxy-animation'];
+    if (component && component.hideJumpscare) {
+      component.hideJumpscare();
       return;
     }
 
