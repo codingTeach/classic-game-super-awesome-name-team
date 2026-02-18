@@ -1,69 +1,85 @@
+/**
+ * weapon-logic — Sistema de disparo para Duck Hunt VR.
+ *
+ * Pensado para lentes de Realidad Virtual:
+ *   - El disparo se dirige hacia donde MIRA el jugador (centro de la cámara).
+ *   - El raycaster del cursor VR (#vr-cursor) determina la dirección.
+ *   - Inputs soportados:
+ *       • Desktop: clic izquierdo, barra espaciadora
+ *       • Móvil : tap en pantalla
+ *       • VR    : trigger del controlador, botón select del HMD
+ *   - Solo impacta UN ave por disparo (la primera viva intersectada).
+ *   - Si no impacta nada → registra fallo visual.
+ *   - Tras cada disparo verifica si se acabaron las balas para ese pájaro.
+ */
 AFRAME.registerComponent('weapon-logic', {
   schema: {
-    shootCooldown: { type: 'number', default: 250 },
+    shootCooldown: { type: 'number', default: 350 },
     maxVisualSize: { type: 'number', default: 0.22 }
   },
 
   init: function () {
-    this.gameSystem = this.el.sceneEl.systems['game-manager'];
+    this.gameSystem       = this.el.sceneEl.systems['game-manager'];
     this.lastShotTimestamp = 0;
+    this._lastTouchTime   = 0;
 
-    this.boundMouseShoot = this.onShootInput.bind(this);
-    this.boundTouchShoot = this.onShootInput.bind(this);
+    // Binds para poder remover los listeners al destruir el componente
+    this.boundMouseShoot    = this.onShootInput.bind(this);
+    this.boundTouchShoot    = this.onShootInput.bind(this);
     this.boundKeyboardShoot = this.onKeyboardShoot.bind(this);
-    this.boundTriggerShoot = this.onShootInput.bind(this);
-    this.boundModelLoaded = this.onModelLoaded.bind(this);
+    this.boundModelLoaded   = this.onModelLoaded.bind(this);
 
-    // Inputs desktop/mobile.
-    window.addEventListener('mousedown', this.boundMouseShoot);
+    // ── Inputs Desktop / Móvil ──
+    window.addEventListener('mousedown',  this.boundMouseShoot);
     window.addEventListener('touchstart', this.boundTouchShoot, { passive: true });
-    window.addEventListener('keydown', this.boundKeyboardShoot);
+    window.addEventListener('keydown',    this.boundKeyboardShoot);
 
-    // Input VR (controladores con trigger).
-    this.el.addEventListener('triggerdown', this.boundTriggerShoot);
+    // ── Input VR: selectstart del WebXR session ──
+    var self = this;
+    this.el.sceneEl.addEventListener('enter-vr', function () {
+      var session = self.el.sceneEl.xrSession;
+      if (session) {
+        session.addEventListener('selectstart', function () {
+          self.onShootInput();
+        });
+      }
+    });
+
     this.el.addEventListener('model-loaded', this.boundModelLoaded);
-
-    // Si el mesh ya existe (recarga/estado previo), normaliza tamaño igualmente.
     this.onModelLoaded();
   },
 
   remove: function () {
-    window.removeEventListener('mousedown', this.boundMouseShoot);
+    window.removeEventListener('mousedown',  this.boundMouseShoot);
     window.removeEventListener('touchstart', this.boundTouchShoot);
-    window.removeEventListener('keydown', this.boundKeyboardShoot);
-    this.el.removeEventListener('triggerdown', this.boundTriggerShoot);
+    window.removeEventListener('keydown',    this.boundKeyboardShoot);
     this.el.removeEventListener('model-loaded', this.boundModelLoaded);
   },
 
+  /* ── Normalizar tamaño del modelo del arma ─────────────────────────── */
+
   onModelLoaded: function () {
     var mesh = this.el.getObject3D('mesh');
-    if (!mesh) {
-      return;
-    }
+    if (!mesh) return;
 
     var box = new THREE.Box3().setFromObject(mesh);
-    if (box.isEmpty()) {
-      return;
-    }
+    if (box.isEmpty()) return;
 
     var size = new THREE.Vector3();
     box.getSize(size);
-
     var largestAxis = Math.max(size.x, size.y, size.z);
-    if (largestAxis <= 0) {
-      return;
-    }
+    if (largestAxis <= 0) return;
 
-    var uniformScaleFactor = this.data.maxVisualSize / largestAxis;
+    var factor       = this.data.maxVisualSize / largestAxis;
     var currentScale = this.el.object3D.scale;
-
-    // Ajuste uniforme manteniendo proporciones del modelo.
     currentScale.set(
-      currentScale.x * uniformScaleFactor,
-      currentScale.y * uniformScaleFactor,
-      currentScale.z * uniformScaleFactor
+      currentScale.x * factor,
+      currentScale.y * factor,
+      currentScale.z * factor
     );
   },
+
+  /* ── Handlers de input ─────────────────────────────────────────────── */
 
   onKeyboardShoot: function (event) {
     if (event.code === 'Space') {
@@ -71,320 +87,195 @@ AFRAME.registerComponent('weapon-logic', {
     }
   },
 
-  onShootInput: function () {
+  onShootInput: function (event) {
+    // Solo botón izquierdo del ratón
+    if (event && event.type === 'mousedown' && event.button !== 0) return;
+
+    // Evitar doble disparo touch→mousedown sintético
     var now = performance.now();
+    if (event && event.type === 'touchstart') this._lastTouchTime = now;
+    if (event && event.type === 'mousedown' && this._lastTouchTime &&
+        now - this._lastTouchTime < 500) return;
 
-    if (now - this.lastShotTimestamp < this.data.shootCooldown) {
-      return;
-    }
+    // Cooldown entre disparos
+    if (now - this.lastShotTimestamp < this.data.shootCooldown) return;
 
-    if (!this.gameSystem || this.gameSystem.gameOver || !this.gameSystem.roundIsActive) {
-      return;
-    }
+    // No disparar fuera de partida activa
+    if (!this.gameSystem || this.gameSystem.gameOver ||
+        !this.gameSystem.roundIsActive || !this.gameSystem.currentBirdAlive) return;
 
+    // Gastar munición (retorna false si no quedan)
     var hasAmmo = this.gameSystem.spendAmmo();
-    if (!hasAmmo) {
-      return;
-    }
+    if (!hasAmmo) return;
 
     this.lastShotTimestamp = now;
 
-    this.playShotSoundPlaceholder();
-    this.emitShotFeedback();
-    this.createMuzzleParticles();
-    
-    // Crear bala visual y verificar impacto
+    // Feedback visual y sonoro
+    this.playShotSound();
+    this.createMuzzleFlash();
     this.createBulletTrail();
+    this.flashCrosshair();
+
+    // Detectar impacto por raycaster desde el centro de la cámara
     this.performRaycastHitCheck();
+
+    // ¿Se acabaron las balas para este pájaro?
+    if (this.gameSystem) {
+      this.gameSystem.checkAmmoDepletion();
+    }
   },
 
-  createMuzzleParticles: function () {
+  /* ── Obtener raycaster del cursor VR ───────────────────────────────── */
+
+  getAimRaycaster: function () {
+    var cursor = document.getElementById('vr-cursor');
+    if (cursor && cursor.components && cursor.components.raycaster) {
+      return cursor.components.raycaster;
+    }
+    // Fallback: raycaster del cursor genérico
+    var fallback = document.querySelector('[cursor]');
+    if (fallback && fallback.components && fallback.components.raycaster) {
+      return fallback.components.raycaster;
+    }
+    return null;
+  },
+
+  /* ── Detección de impacto: solo UN ave viva por disparo ─────────────── */
+
+  performRaycastHitCheck: function () {
+    var rc = this.getAimRaycaster();
+    if (!rc) return;
+
+    rc.refreshObjects();
+    var intersections = rc.intersections;
+
+    if (!intersections || intersections.length === 0) {
+      // Sin intersecciones → fallo
+      if (this.gameSystem) this.gameSystem.registerMissedShot();
+      return;
+    }
+
+    // Buscar la primera ave VIVA
+    for (var i = 0; i < intersections.length; i++) {
+      var entity = this.findTargetEntity(intersections[i].object && intersections[i].object.el);
+      if (!entity) continue;
+
+      var comp = entity.components['target-logic'];
+      if (!comp || !comp.isAlive || !comp.isActiveInFlight) continue;
+
+      // ¡Impacto válido!
+      entity.emit('hit-by-shot', { point: intersections[i].point });
+      this.createHitMarker(intersections[i].point);
+      return; // UN solo impacto por disparo
+    }
+
+    // Ningún objetivo vivo → fallo
+    if (this.gameSystem) this.gameSystem.registerMissedShot();
+  },
+
+  /* ── Subir por el DOM hasta encontrar entidad con target-logic ──────── */
+
+  findTargetEntity: function (el) {
+    var current = el;
+    while (current) {
+      if (current.components && current.components['target-logic']) return current;
+      current = current.parentNode;
+    }
+    return null;
+  },
+
+  /* ══════════════════════════════════════════════════════════════════════
+     EFECTOS VISUALES
+  ═══════════════════════════════════════════════════════════════════════ */
+
+  /** Flash del crosshair al disparar */
+  flashCrosshair: function () {
+    var cursor = document.getElementById('vr-cursor');
+    if (!cursor) return;
+    cursor.setAttribute('material', 'color', '#FFFF00');
+    setTimeout(function () {
+      if (cursor) cursor.setAttribute('material', 'color', '#FFFFFF');
+    }, 120);
+  },
+
+  /** Sonido de disparo */
+  playShotSound: function () {
+    var audio = document.getElementById('laser-audio');
+    if (audio) { audio.currentTime = 0; audio.play(); }
+  },
+
+  /** Flash en la boca del arma */
+  createMuzzleFlash: function () {
     var muzzle = new THREE.Vector3();
     this.el.object3D.getWorldPosition(muzzle);
 
-    // Flash principal
     var flash = document.createElement('a-sphere');
-    flash.setAttribute('radius', '0.09');
+    flash.setAttribute('radius', '0.08');
     flash.setAttribute('color', '#FFD166');
     flash.setAttribute('material', 'shader: flat; emissive: #FFD166; emissiveIntensity: 1.6; opacity: 0.9; transparent: true');
     flash.setAttribute('position', muzzle);
     this.el.sceneEl.appendChild(flash);
 
-    // Chispas cortas de disparo
-    for (var i = 0; i < 5; i++) {
-      var spark = document.createElement('a-sphere');
-      spark.setAttribute('radius', '0.02');
-      spark.setAttribute('color', '#FFB703');
-      spark.setAttribute('material', 'shader: flat; emissive: #FFB703; emissiveIntensity: 1.4');
-      spark.setAttribute('position', muzzle);
-      this.el.sceneEl.appendChild(spark);
-
-      (function (sparkEl, origin) {
-        var direction = new THREE.Vector3(
-          (Math.random() - 0.5) * 2,
-          (Math.random() - 0.3) * 1.2,
-          (Math.random() - 0.5) * 2
-        ).normalize();
-
-        var startTime = performance.now();
-        var animateSpark = function () {
-          var elapsed = performance.now() - startTime;
-          var progress = elapsed / 140;
-
-          if (progress < 1 && sparkEl.parentNode) {
-            var newPos = new THREE.Vector3(
-              origin.x + direction.x * progress * 0.18,
-              origin.y + direction.y * progress * 0.18,
-              origin.z + direction.z * progress * 0.18
-            );
-            sparkEl.setAttribute('position', newPos);
-            sparkEl.setAttribute('material', 'opacity: ' + (1 - progress));
-            requestAnimationFrame(animateSpark);
-          } else if (sparkEl.parentNode) {
-            sparkEl.parentNode.removeChild(sparkEl);
-          }
-        };
-
-        animateSpark();
-      })(spark, muzzle);
-    }
-
     setTimeout(function () {
       if (flash.parentNode) flash.parentNode.removeChild(flash);
-    }, 90);
+    }, 80);
   },
 
-  getAimRaycasterComponent: function () {
-    var cursor = document.querySelector('a-cursor');
-
-    if (cursor && cursor.components && cursor.components.raycaster) {
-      return cursor.components.raycaster;
-    }
-
-    return this.el.components.raycaster || null;
-  },
-
+  /** Trail visual de la bala */
   createBulletTrail: function () {
     var camera = this.el.sceneEl.camera;
     if (!camera) return;
 
-    // Obtener la posición de la cámara (origen del disparo)
     var origin = new THREE.Vector3();
     camera.getWorldPosition(origin);
 
-    // Obtener el cursor y su raycaster para disparar hacia donde apunta la mira
-    var raycasterComponent = this.getAimRaycasterComponent();
+    var rc = this.getAimRaycaster();
+    if (!rc) return;
 
-    if (!raycasterComponent) return;
+    var direction = rc.raycaster.ray.direction.clone();
+    var endPoint  = origin.clone().add(direction.multiplyScalar(50));
 
-    var direction = raycasterComponent.raycaster.ray.direction.clone();
-    
-    // Punto final del rayo (si no impacta nada, 50 unidades adelante)
-    var endPoint = origin.clone().add(direction.multiplyScalar(50));
-
-    // Verificar si hay impactos para ajustar el punto final
-    raycasterComponent.refreshObjects();
-    var intersections = raycasterComponent.intersections;
-    
-    if (intersections && intersections.length > 0) {
-      // Si hay impacto, la bala va hasta ese punto
-      endPoint = intersections[0].point;
+    rc.refreshObjects();
+    if (rc.intersections && rc.intersections.length > 0) {
+      endPoint = rc.intersections[0].point.clone();
     }
 
-    // Crear el proyectil visual
-    this.animateBullet(origin, endPoint);
-  },
-
-  animateBullet: function (startPos, endPos) {
-    // Crear esfera de bala
+    // Bala animada
     var bullet = document.createElement('a-sphere');
-    bullet.setAttribute('radius', '0.05');
+    bullet.setAttribute('radius', '0.04');
     bullet.setAttribute('color', '#FFFF00');
     bullet.setAttribute('material', 'shader: flat; emissive: #FFFF00; emissiveIntensity: 1');
-    bullet.setAttribute('position', startPos);
-    
+    bullet.setAttribute('position', origin);
     this.el.sceneEl.appendChild(bullet);
 
-    // Crear trail/estela detrás de la bala
-    var trail = document.createElement('a-entity');
-    trail.setAttribute('line', 'start: ' + startPos.x + ' ' + startPos.y + ' ' + startPos.z + 
-                                '; end: ' + startPos.x + ' ' + startPos.y + ' ' + startPos.z + 
-                                '; color: #FFAA00; opacity: 0.8');
-    this.el.sceneEl.appendChild(trail);
-
-    // Animar la bala
-    var distance = startPos.distanceTo(endPos);
-    var duration = distance * 10; // Velocidad de la bala (ms por unidad)
-    duration = Math.min(duration, 300); // Máximo 300ms
-
+    var distance = origin.distanceTo(endPoint);
+    var duration = Math.min(distance * 8, 250);
     var startTime = performance.now();
-    var self = this;
+    var scene = this.el.sceneEl;
 
-    var animate = function() {
-      var elapsed = performance.now() - startTime;
-      var progress = Math.min(elapsed / duration, 1);
-
+    var animate = function () {
+      var progress = Math.min((performance.now() - startTime) / duration, 1);
       if (progress < 1) {
-        // Interpolar posición
-        var currentPos = new THREE.Vector3().lerpVectors(startPos, endPos, progress);
-        bullet.setAttribute('position', currentPos);
-        
-        // Actualizar trail
-        trail.setAttribute('line', 'start: ' + startPos.x + ' ' + startPos.y + ' ' + startPos.z + 
-                                    '; end: ' + currentPos.x + ' ' + currentPos.y + ' ' + currentPos.z);
-
+        var p = new THREE.Vector3().lerpVectors(origin, endPoint, progress);
+        bullet.setAttribute('position', p);
         requestAnimationFrame(animate);
       } else {
-        // Bala llegó al destino
-        bullet.setAttribute('position', endPos);
-        
-        // Crear efecto de impacto
-        self.createImpactEffect(endPos);
-        
-        // Limpiar después de un momento
-        setTimeout(function() {
-          if (bullet.parentNode) bullet.parentNode.removeChild(bullet);
-          if (trail.parentNode) trail.parentNode.removeChild(trail);
-        }, 100);
+        if (bullet.parentNode) bullet.parentNode.removeChild(bullet);
       }
     };
-
     animate();
   },
 
-  createImpactEffect: function(position) {
-    // Crear destello de impacto
-    var flash = document.createElement('a-sphere');
-    flash.setAttribute('radius', '0.15');
-    flash.setAttribute('color', '#FFFFFF');
-    flash.setAttribute('material', 'shader: flat; emissive: #FFFFFF; emissiveIntensity: 2; opacity: 0.9; transparent: true');
-    flash.setAttribute('position', position);
-    
-    this.el.sceneEl.appendChild(flash);
-
-    // Crear partículas de chispas
-    for (var i = 0; i < 8; i++) {
-      var spark = document.createElement('a-sphere');
-      spark.setAttribute('radius', '0.03');
-      spark.setAttribute('color', '#FF8800');
-      spark.setAttribute('material', 'shader: flat; emissive: #FF8800; emissiveIntensity: 1.5');
-      spark.setAttribute('position', position);
-      
-      this.el.sceneEl.appendChild(spark);
-
-      // Animar chispas en direcciones aleatorias
-      (function(sparkEl, pos) {
-        var direction = new THREE.Vector3(
-          (Math.random() - 0.5) * 2,
-          (Math.random() - 0.5) * 2,
-          (Math.random() - 0.5) * 2
-        ).normalize();
-
-        var startTime = performance.now();
-        var animateSpark = function() {
-          var elapsed = performance.now() - startTime;
-          var progress = elapsed / 200; // 200ms de duración
-
-          if (progress < 1 && sparkEl.parentNode) {
-            var newPos = new THREE.Vector3(
-              pos.x + direction.x * progress * 0.3,
-              pos.y + direction.y * progress * 0.3,
-              pos.z + direction.z * progress * 0.3
-            );
-            sparkEl.setAttribute('position', newPos);
-            sparkEl.setAttribute('material', 'opacity: ' + (1 - progress));
-            requestAnimationFrame(animateSpark);
-          } else {
-            if (sparkEl.parentNode) sparkEl.parentNode.removeChild(sparkEl);
-          }
-        };
-        animateSpark();
-      })(spark, position);
-    }
-
-    // Eliminar el flash principal
-    setTimeout(function() {
-      if (flash.parentNode) flash.parentNode.removeChild(flash);
-    }, 150);
-  },
-
-  playShotSoundPlaceholder: function () {
-    // Reproducir sonido de laser
-    var laserAudio = document.getElementById('laser-audio');
-    if (laserAudio) {
-      laserAudio.currentTime = 0;
-      laserAudio.play();
-    }
-    this.el.emit('weapon-shot-sfx');
-  },
-
-  emitShotFeedback: function () {
-    this.el.emit('weapon-shot', {
-      bulletsLeft: this.gameSystem ? this.gameSystem.bulletsLeft : null
-    });
-  },
-
-  performRaycastHitCheck: function () {
-    var raycasterComponent = this.getAimRaycasterComponent();
-
-    if (!raycasterComponent) {
-      console.warn('No raycaster component found!');
-      return;
-    }
-
-    raycasterComponent.refreshObjects();
-
-    var intersections = raycasterComponent.intersections;
-    if (!intersections || intersections.length === 0) {
-      console.log('Disparo fallado - sin intersecciones');
-      return;
-    }
-
-    console.log('Intersecciones detectadas:', intersections.length);
-
-    // Primer impacto válido con entidad que tenga target-logic.
-    for (var index = 0; index < intersections.length; index += 1) {
-      var candidateObject = intersections[index].object;
-      var candidateEntity = this.findTargetEntity(candidateObject && candidateObject.el);
-
-      if (candidateEntity) {
-        console.log('¡Impacto en ave!', candidateEntity.id);
-        candidateEntity.emit('hit-by-shot', {
-          weapon: this.el,
-          point: intersections[index].point
-        });
-        
-        // Feedback visual en el punto de impacto
-        this.createHitMarker(intersections[index].point);
-        break;
-      }
-    }
-  },
-
-  createHitMarker: function(point) {
-    // Crear un marcador visual temporal en el punto de impacto
+  /** Marcador de impacto */
+  createHitMarker: function (point) {
     var marker = document.createElement('a-sphere');
-    marker.setAttribute('radius', '0.1');
-    marker.setAttribute('color', '#FF0000');
+    marker.setAttribute('radius', '0.12');
+    marker.setAttribute('color', '#FF3333');
+    marker.setAttribute('material', 'shader: flat; emissive: #FF3333; emissiveIntensity: 1.5; opacity: 0.9; transparent: true');
     marker.setAttribute('position', point);
     this.el.sceneEl.appendChild(marker);
-    
-    // Eliminar el marcador después de medio segundo
-    setTimeout(function() {
-      marker.parentNode.removeChild(marker);
-    }, 500);
-  },
-
-  findTargetEntity: function (entity) {
-    var current = entity;
-
-    while (current) {
-      if (current.components && current.components['target-logic']) {
-        return current;
-      }
-      current = current.parentNode;
-    }
-
-    return null;
+    setTimeout(function () {
+      if (marker.parentNode) marker.parentNode.removeChild(marker);
+    }, 400);
   }
 });

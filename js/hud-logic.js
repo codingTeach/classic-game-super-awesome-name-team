@@ -1,215 +1,162 @@
+/**
+ * hud-logic — HUD estilo Duck Hunt para VR con soporte de niveles.
+ *
+ * Muestra (fijo a la cámara):
+ *   SCORE 000000      — puntuación con ceros a la izquierda
+ *   LEVEL X           — nivel actual
+ *   TIME  XX          — tiempo restante del NIVEL (no del pájaro)
+ *   AMMO  ■ ■ □       — balas restantes para el pájaro actual
+ *   BIRDS X/5         — aves cazadas este nivel / objetivo
+ *   MISS  ✗ ○ ○       — aves escapadas / máximo permitido
+ *
+ * Eventos que escucha:
+ *   game-waiting       → ocultar HUD
+ *   round-started      → mostrar HUD
+ *   game-state-changed → re-renderizar datos
+ *   game-over          → ocultar HUD
+ *   shot-missed        → flash "MISS!" breve
+ *   level-complete     → flash "NIVEL X COMPLETO!"
+ */
 AFRAME.registerComponent('hud-logic', {
-  schema: {
-    paddingX: { type: 'number', default: 0.05 },
-    paddingY: { type: 'number', default: 0.04 },
-    lineGap: { type: 'number', default: 0.03 }
-  },
+  schema: {},
 
   init: function () {
-    this.scene = this.el.sceneEl;
+    this.scene      = this.el.sceneEl;
     this.gameSystem = this.scene.systems['game-manager'];
 
-    this.scoreText = this.el.querySelector('#hud-score');
-    this.ammoText = this.el.querySelector('#hud-ammo');
-    this.timeText = this.el.querySelector('#hud-time');
-    this.statusText = this.el.querySelector('#hud-status');
-    this.background = this.el.querySelector('#hud-bg');
+    // Referencias a los elementos de texto del HUD
+    this.scoreText   = this.el.querySelector('#hud-score');
+    this.levelText   = this.el.querySelector('#hud-level');
+    this.timeText    = this.el.querySelector('#hud-time');
+    this.shotsText   = this.el.querySelector('#hud-shots');
+    this.birdsText   = this.el.querySelector('#hud-birds');
+    this.missesText  = this.el.querySelector('#hud-misses');
+    this.missFlash   = this.el.querySelector('#hud-miss-flash');
+    this.levelFlash  = this.el.querySelector('#hud-level-flash');
 
-    this.textItems = [this.scoreText, this.ammoText, this.timeText, this.statusText];
+    // Bind de manejadores
+    this.boundOnStateChanged  = this.onStateChanged.bind(this);
+    this.boundOnGameOver      = this.onGameOver.bind(this);
+    this.boundOnRoundStarted  = this.onRoundStarted.bind(this);
+    this.boundOnMiss          = this.onShotMissed.bind(this);
+    this.boundOnWaiting       = this.onGameWaiting.bind(this);
+    this.boundOnLevelComplete = this.onLevelComplete.bind(this);
 
-    this.boundOnStateChanged = this.onStateChanged.bind(this);
-    this.boundOnGameOver = this.onGameOver.bind(this);
-    this.boundOnRoundStarted = this.onRoundStarted.bind(this);
+    this.scene.addEventListener('game-waiting',       this.boundOnWaiting);
+    this.scene.addEventListener('game-state-changed',  this.boundOnStateChanged);
+    this.scene.addEventListener('game-over',           this.boundOnGameOver);
+    this.scene.addEventListener('round-started',       this.boundOnRoundStarted);
+    this.scene.addEventListener('shot-missed',         this.boundOnMiss);
+    this.scene.addEventListener('level-complete',      this.boundOnLevelComplete);
 
-    this.screamerEntity = null;
-    this.createScreamerEntity();
-
-    this.scene.addEventListener('game-state-changed', this.boundOnStateChanged);
-    this.scene.addEventListener('game-over', this.boundOnGameOver);
-    this.scene.addEventListener('round-started', this.boundOnRoundStarted);
-
-    if (this.gameSystem) {
-      this.render(this.gameSystem.getSnapshot());
-    }
+    // Ocultar hasta que empiece la partida
+    this.el.setAttribute('visible', false);
   },
 
   remove: function () {
-    this.scene.removeEventListener('game-state-changed', this.boundOnStateChanged);
-    this.scene.removeEventListener('game-over', this.boundOnGameOver);
-    this.scene.removeEventListener('round-started', this.boundOnRoundStarted);
+    this.scene.removeEventListener('game-waiting',       this.boundOnWaiting);
+    this.scene.removeEventListener('game-state-changed',  this.boundOnStateChanged);
+    this.scene.removeEventListener('game-over',           this.boundOnGameOver);
+    this.scene.removeEventListener('round-started',       this.boundOnRoundStarted);
+    this.scene.removeEventListener('shot-missed',         this.boundOnMiss);
+    this.scene.removeEventListener('level-complete',      this.boundOnLevelComplete);
+  },
+
+  /* ── Manejadores de eventos ────────────────────────────────────────── */
+
+  onGameWaiting: function () {
+    this.el.setAttribute('visible', false);
+  },
+
+  onRoundStarted: function (event) {
+    this.el.setAttribute('visible', true);
+    if (this.missFlash)  this.missFlash.setAttribute('visible', false);
+    if (this.levelFlash) this.levelFlash.setAttribute('visible', false);
+    this.render(event.detail);
   },
 
   onStateChanged: function (event) {
     this.render(event.detail);
   },
 
-  onRoundStarted: function () {
-    this.hideScreamer();
-
-    if (this.statusText) {
-      this.statusText.setAttribute('value', '');
-    }
-    this.scheduleResize();
+  onGameOver: function () {
+    this.el.setAttribute('visible', false);
   },
 
-  onGameOver: function (event) {
-    var reason = event.detail && event.detail.reason ? event.detail.reason : 'game-over';
-    var label = 'GAME OVER';
-
-    if (reason === 'all-targets-down') {
-      label = '¡GANASTE!';
-    } else if (reason === 'out-of-ammo') {
-      label = 'Sin balas';
-    } else if (reason === 'time-up') {
-      label = 'Tiempo agotado';
-    }
-
-    if (this.statusText) {
-      this.statusText.setAttribute('value', label);
-    }
-
-    if (reason === 'out-of-ammo' || reason === 'time-up') {
-      this.showScreamer();
-    } else {
-      this.hideScreamer();
-    }
-
-    this.scheduleResize();
+  onShotMissed: function () {
+    if (!this.missFlash) return;
+    this.missFlash.setAttribute('visible', true);
+    var self = this;
+    if (this._missTimeout) clearTimeout(this._missTimeout);
+    this._missTimeout = setTimeout(function () {
+      if (self.missFlash) self.missFlash.setAttribute('visible', false);
+    }, 500);
   },
+
+  onLevelComplete: function (event) {
+    if (!this.levelFlash) return;
+    var lvl = event.detail && event.detail.level ? event.detail.level : '?';
+    this.levelFlash.setAttribute('value', 'NIVEL ' + lvl + ' COMPLETO!');
+    this.levelFlash.setAttribute('visible', true);
+    var self = this;
+    if (this._levelTimeout) clearTimeout(this._levelTimeout);
+    this._levelTimeout = setTimeout(function () {
+      if (self.levelFlash) self.levelFlash.setAttribute('visible', false);
+    }, 2200);
+  },
+
+  /* ── Renderizar datos del snapshot ──────────────────────────────────── */
 
   render: function (snapshot) {
-    if (!snapshot) {
-      return;
-    }
+    if (!snapshot) return;
 
+    // SCORE con ceros a la izquierda
     if (this.scoreText) {
-      this.scoreText.setAttribute('value', 'Puntaje: ' + snapshot.score);
+      var s = String(snapshot.score || 0);
+      while (s.length < 6) s = '0' + s;
+      this.scoreText.setAttribute('value', 'SCORE  ' + s);
     }
 
-    if (this.ammoText) {
-      this.ammoText.setAttribute('value', 'Balas: ' + snapshot.bulletsLeft);
+    // LEVEL
+    if (this.levelText) {
+      this.levelText.setAttribute('value', 'LEVEL ' + (snapshot.level || 1));
     }
 
+    // TIME (timer del NIVEL, NO del pájaro)
     if (this.timeText) {
-      this.timeText.setAttribute('value', 'Tiempo: ' + Math.ceil(snapshot.timeLeft) + 's');
+      var t = Math.ceil(snapshot.levelTimeLeft || 0);
+      this.timeText.setAttribute('value', 'TIME  ' + t);
+      this.timeText.setAttribute('color', t <= 10 ? '#FF4444' : '#ffffff');
     }
 
-    this.scheduleResize();
-  },
-
-  scheduleResize: function () {
-    var self = this;
-    if (this.resizeTimeout) {
-      clearTimeout(this.resizeTimeout);
-    }
-    this.resizeTimeout = setTimeout(function () {
-      self.resizeBackground();
-    }, 0);
-  },
-
-  resizeBackground: function () {
-    var maxWidth = 0;
-    var totalHeight = 0;
-    var yCursor = this.data.paddingY;
-
-    for (var i = 0; i < this.textItems.length; i++) {
-      var textEl = this.textItems[i];
-      if (!textEl || !textEl.getAttribute('value')) {
-        continue;
+    // AMMO  ■ ■ □
+    if (this.shotsText) {
+      var max  = snapshot.bulletsPerBird || 3;
+      var left = snapshot.bulletsLeft    || 0;
+      var ammo = '';
+      for (var i = 0; i < max; i++) {
+        ammo += (i < left) ? '| ' : '. ';
       }
-
-      var size = this.getTextSize(textEl);
-      maxWidth = Math.max(maxWidth, size.width);
-
-      textEl.setAttribute('position', {
-        x: this.data.paddingX,
-        y: -yCursor,
-        z: 0
-      });
-
-      yCursor += size.height + this.data.lineGap;
-      totalHeight = yCursor - this.data.lineGap + this.data.paddingY;
+      this.shotsText.setAttribute('value', 'AMMO  ' + ammo.trim());
     }
 
-    if (this.background) {
-      var bgWidth = maxWidth + this.data.paddingX * 2;
-      var bgHeight = totalHeight;
-
-      this.background.setAttribute('width', bgWidth);
-      this.background.setAttribute('height', bgHeight);
-      this.background.setAttribute('position', {
-        x: bgWidth / 2,
-        y: -bgHeight / 2,
-        z: -0.01
-      });
-    }
-  },
-
-  getTextSize: function (textEl) {
-    var mesh = textEl.getObject3D('mesh');
-    if (!mesh || !mesh.geometry) {
-      return { width: 0.3, height: 0.08 };
+    // BIRDS  X / Y (este nivel)
+    if (this.birdsText) {
+      var killed = snapshot.birdsKilledThisLevel || 0;
+      var needed = snapshot.birdsPerLevel        || 5;
+      this.birdsText.setAttribute('value', 'BIRDS ' + killed + '/' + needed);
     }
 
-    mesh.geometry.computeBoundingBox();
-    var box = mesh.geometry.boundingBox;
-    var size = new THREE.Vector3();
-    box.getSize(size);
-
-    return { width: size.x, height: size.y };
-  },
-
-  createScreamerEntity: function () {
-    var parent = this.el.parentEl || this.el;
-    if (!parent || !parent.appendChild) {
-      return;
+    // MISS  X O O
+    if (this.missesText) {
+      var misses = snapshot.birdsMissed || 0;
+      var maxM   = snapshot.maxMisses   || 3;
+      var icons  = '';
+      for (var j = 0; j < maxM; j++) {
+        icons += (j < misses) ? 'X ' : 'O ';
+      }
+      this.missesText.setAttribute('value', 'MISS  ' + icons.trim());
+      this.missesText.setAttribute('color', misses >= maxM - 1 ? '#FF4444' : '#FF9933');
     }
-
-    this.screamerEntity = document.createElement('a-entity');
-    this.screamerEntity.setAttribute('id', 'foxy-screamer');
-    this.screamerEntity.setAttribute('gltf-model', '#foxy-model');
-    this.screamerEntity.setAttribute('position', '0 0 -0.42');
-    this.screamerEntity.setAttribute('rotation', '0 -5 0');
-    this.screamerEntity.setAttribute('scale', '0.4 0.4 0.4');
-    this.screamerEntity.setAttribute('foxy-animation', 'clip: Jumpscare; loop: once');
-    this.screamerEntity.setAttribute('visible', 'false');
-
-    parent.appendChild(this.screamerEntity);
-  },
-
-  showScreamer: function () {
-    if (!this.screamerEntity) {
-      return;
-    }
-
-    this.screamerEntity.setAttribute('visible', 'true');
-
-    // Reproducir sonido de Foxy desde el segundo 1
-    var foxyAudio = document.getElementById('foxy-audio');
-    if (foxyAudio) {
-      foxyAudio.currentTime = 1;
-      foxyAudio.play();
-    }
-
-    var component = this.screamerEntity.components['foxy-animation'];
-    if (component && component.playJumpscare) {
-      setTimeout(function () {
-        component.playJumpscare();
-      }, 50);
-    }
-  },
-
-  hideScreamer: function () {
-    if (!this.screamerEntity) {
-      return;
-    }
-
-    var component = this.screamerEntity.components['foxy-animation'];
-    if (component && component.hideJumpscare) {
-      component.hideJumpscare();
-      return;
-    }
-
-    this.screamerEntity.setAttribute('visible', 'false');
   }
 });

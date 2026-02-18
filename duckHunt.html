@@ -16,7 +16,7 @@
     <script src="./js/menu-button.js"></script>
   </head>
   <body>
-    <a-scene background="color: #87ceeb" game-manager="roundTime: 90; bulletsPerBird: 3; totalBirds: 3" menu-button physics="gravity: -9.8; debug: false">
+    <a-scene background="color: #87ceeb" game-manager="bulletsPerBird: 3; birdsPerLevel: 5; maxMisses: 3; levelTime: 60; maxLevel: 3" game-ui physics="gravity: -9.8; debug: false">
       <a-sky src="./src/mapas/bosque.jpg"></a-sky>
       <a-assets>
         <a-asset-item id="booth-model" src="./src/mapas/Brick wall.glb"></a-asset-item>
@@ -62,7 +62,6 @@
           movementAreaMin: -10 1.5 -12;
           movementAreaMax: 10 7 -2;
           speed: 2.5;
-          respawnDelay: 1500;
           spawnHeight: 3.5;
           spawnHeightVariation: 2;
           flightDistance: 18;
@@ -87,7 +86,6 @@
           movementAreaMin: -10 1.5 -12;
           movementAreaMax: 10 7 -2;
           speed: 3.0;
-          respawnDelay: 2000;
           spawnHeight: 4;
           spawnHeightVariation: 2.5;
           flightDistance: 20;
@@ -112,7 +110,6 @@
           movementAreaMin: -10 1.5 -12;
           movementAreaMax: 10 7 -2;
           speed: 3.5;
-          respawnDelay: 2500;
           spawnHeight: 3;
           spawnHeightVariation: 2;
           flightDistance: 22;
@@ -131,50 +128,339 @@
       </a-entity>
 
       <a-entity id="rig" position="0 1.6 0">
-        <a-camera>
-
-          <a-cursor fuse="true" fuse-timeout="700" raycaster="objects: .target, .bird-hitbox; far: 50"></a-cursor>
-          <!-- HUD mínimo en pantalla, desacoplado vía eventos del sistema global -->
-          <a-entity id="hud" hud-logic position="1.2 0.8 -1.15" scale="0.95 0.95 0.95">
-            <a-plane
-              id="hud-bg"
-              width="0.85"
-              height="0.42"
-              color="#0b1b2b"
-              opacity="0.65"
-              shader="flat"
-              position="0.35 -0.12 -0.01"
-            ></a-plane>
-            <a-text id="hud-score" value="Puntaje: 0" color="#ffffff" width="1.6" position="0 0.02 0" align="left" anchor="left"></a-text>
-            <a-text id="hud-ammo" value="Balas: 0" color="#ffffff" width="1.6" position="0 -0.08 0" align="left" anchor="left"></a-text>
-            <a-text id="hud-time" value="Tiempo: 0s" color="#ffffff" width="1.6" position="0 -0.18 0" align="left" anchor="left"></a-text>
-            <a-text id="hud-status" value="" color="#ffeb3b" width="1.8" position="0 -0.3 0" align="left" anchor="left"></a-text>
-          </a-entity>
-
-          <!-- BACK TO MENU BUTTON -->
-          <a-box
-            id="back-to-menu"
-            width="0.3"
-            height="0.08"
-            depth="0.01"
-            color="#FF6B6B"
-            position="0.8 -0.9 -1.15"
-            cursor-listener
-          >
-            <a-text
-              value="MENU"
-              color="#FFFFFF"
-              width="0.5"
-              position="0 0 0.01"
-              align="center"
-              anchor="center"
-              scale="0.8 0.8 0.8"
-            ></a-text>
-          </a-box>
+        <a-camera look-controls="pointerLockEnabled: true">
 
           <!--
-            El arma es hija de cámara para mantener alineación con la vista.
-            weapon-logic consulta game-manager (system) para gastar munición sin acoplarse a targets concretos.
+            Retícula VR visible + cursor con fuse para menús.
+            El raycaster apunta desde el centro de la cámara (rayOrigin: entity).
+            fuse: true → permite interactuar mirando los botones del menú en VR.
+            Durante el juego, el fuse se desactiva dinámicamente.
+          -->
+          <a-entity
+            id="vr-cursor"
+            cursor="rayOrigin: entity; fuse: true; fuseTimeout: 1500"
+            raycaster="objects: .bird-hitbox, .clickable; far: 50"
+            position="0 0 -0.8"
+            geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.008"
+            material="color: #FFFFFF; shader: flat; opacity: 0.85; transparent: true"
+          ></a-entity>
+          <!-- Punto central de la mira -->
+          <a-entity
+            position="0 0 -0.8"
+            geometry="primitive: circle; radius: 0.002"
+            material="color: #FF3333; shader: flat"
+          ></a-entity>
+
+          <!-- Capa difuminada para el menú (se oculta al jugar) -->
+          <a-plane
+            id="menu-dimmer"
+            width="6" height="4"
+            color="#0b1020"
+            material="transparent: true; opacity: 0.55; shader: flat"
+            position="0 0 -1.55"
+            visible="true"
+          ></a-plane>
+
+          <!-- ═══════════════════════════════════════════
+               HUD estilo Duck Hunt (barra superior)
+               Oculto hasta que empiece la ronda.
+               Gestionado por hud-logic.js
+          ════════════════════════════════════════════ -->
+          <a-entity id="hud" hud-logic position="0 0.86 -1.2" visible="false">
+            <a-plane
+              id="hud-bg"
+              width="1.9" height="0.34"
+              color="#000000"
+              material="transparent: true; opacity: 0.85; shader: flat"
+              position="0 -0.01 -0.005"
+            ></a-plane>
+
+            <!-- Fila superior: SCORE | LEVEL | TIME -->
+            <a-text id="hud-score"
+              value="SCORE  000000"
+              color="#66ff33" width="2.0"
+              position="-0.88 0.08 0"
+              align="left" anchor="left" font="monoid"
+            ></a-text>
+
+            <a-text id="hud-level"
+              value="LEVEL 1"
+              color="#33FFFF" width="1.6"
+              position="0 0.08 0"
+              align="center" anchor="center" font="monoid"
+            ></a-text>
+
+            <a-text id="hud-time"
+              value="TIME  60"
+              color="#ffffff" width="1.2"
+              position="0.88 0.08 0"
+              align="right" anchor="right" font="monoid"
+            ></a-text>
+
+            <!-- Fila inferior: AMMO | BIRDS | MISS -->
+            <a-text id="hud-shots"
+              value="AMMO  | | |"
+              color="#ff9933" width="2.0"
+              position="-0.88 -0.06 0"
+              align="left" anchor="left" font="monoid"
+            ></a-text>
+
+            <a-text id="hud-birds"
+              value="BIRDS 0/5"
+              color="#33FFFF" width="1.6"
+              position="0 -0.06 0"
+              align="center" anchor="center" font="monoid"
+            ></a-text>
+
+            <a-text id="hud-misses"
+              value="MISS  O O O"
+              color="#FF9933" width="1.4"
+              position="0.88 -0.06 0"
+              align="right" anchor="right" font="monoid"
+            ></a-text>
+
+            <!-- Flash indicators -->
+            <a-text id="hud-miss-flash"
+              value="MISS!"
+              color="#FF4444" width="2.0"
+              position="0 -0.20 0"
+              align="center" anchor="center" font="monoid"
+              visible="false"
+            ></a-text>
+
+            <a-text id="hud-level-flash"
+              value=""
+              color="#FFFF00" width="2.5"
+              position="0 0.22 0"
+              align="center" anchor="center" font="monoid"
+              visible="false"
+            ></a-text>
+          </a-entity>
+
+          <!-- ═══════════════════════════════════════════
+               MENÚ DE INICIO
+               Visible al cargar. Se oculta al presionar "Jugar".
+          ════════════════════════════════════════════ -->
+          <a-entity id="start-menu" position="0 0 -2.8" visible="true">
+            <!-- Panel de fondo del menú -->
+            <a-plane
+              width="4.2" height="3.8"
+              color="#0a0e1a"
+              material="transparent: true; opacity: 0.92; shader: flat"
+              position="0 0.3 -0.01"
+            ></a-plane>
+
+            <!-- Bordes decorativos -->
+            <a-plane width="4.0" height="0.03" color="#FF9933" shader="flat" position="0 2.15 0"></a-plane>
+            <a-plane width="4.0" height="0.03" color="#FF9933" shader="flat" position="0 -1.45 0"></a-plane>
+
+            <!-- DUCK HUNT TITLE -->
+            <a-text
+              value="DUCK"
+              color="#33FFFF"
+              width="9"
+              position="0 1.8 0"
+              align="center"
+              anchor="center"
+              font="kelsonsans"
+              scale="1.5 1.5 1.5"
+            ></a-text>
+
+            <a-plane
+              width="3.2"
+              height="0.04"
+              color="#FF9933"
+              position="0 1.35 0"
+            ></a-plane>
+
+            <a-text
+              value="HUNT"
+              color="#33FFFF"
+              width="9"
+              position="0 0.85 0"
+              align="center"
+              anchor="center"
+              font="kelsonsans"
+              scale="1.5 1.5 1.5"
+            ></a-text>
+
+            <!-- Subtítulo -->
+            <a-text
+              value="VR EDITION"
+              color="#FF9933"
+              width="3.5"
+              position="0 0.48 0"
+              align="center"
+              anchor="center"
+              font="monoid"
+            ></a-text>
+
+            <!-- BOTÓN JUGAR - Grande y visible -->
+            <a-plane
+              id="play-btn-bg"
+              class="clickable"
+              width="2.2" height="0.5"
+              color="#FF6600"
+              shader="flat"
+              position="0 -0.1 0"
+            ></a-plane>
+            <a-text
+              value="JUGAR"
+              color="#FFFFFF"
+              width="6"
+              position="0 -0.1 0.01"
+              align="center"
+              anchor="center"
+              font="monoid"
+            ></a-text>
+
+            <!-- Info de juego -->
+            <a-text
+              value="3 balas por ave | 5 aves por nivel"
+              color="#8899BB"
+              width="3"
+              position="0 -0.55 0"
+              align="center"
+              anchor="center"
+              font="monoid"
+              scale="0.7 0.7 0.7"
+            ></a-text>
+
+            <!-- TOP SCORE -->
+            <a-text
+              id="menu-top-score"
+              value="TOP SCORE = 0"
+              color="#66FF33"
+              width="4"
+              position="0 -0.85 0"
+              align="center"
+              anchor="center"
+              font="monoid"
+            ></a-text>
+
+            <!-- Instrucciones VR -->
+            <a-text
+              value="Mira al centro y dispara"
+              color="#667799"
+              width="3"
+              position="0 -1.2 0"
+              align="center"
+              anchor="center"
+              font="monoid"
+              scale="0.6 0.6 0.6"
+            ></a-text>
+          </a-entity>
+
+          <!-- ═══════════════════════════════════════════
+               PANTALLA DE FIN DE PARTIDA
+               Oculta al inicio. Aparece al terminar la ronda.
+          ════════════════════════════════════════════ -->
+          <a-entity id="gameover-screen" position="0 0.02 -1.25" visible="false">
+            <!-- Panel de fondo -->
+            <a-plane
+              width="1.65" height="0.82"
+              color="#081524" opacity="0.95"
+              shader="flat"
+            ></a-plane>
+
+            <!-- Borde decorativo -->
+            <a-plane
+              width="1.65" height="0.01"
+              color="#FF6B6B" shader="flat"
+              position="0 0.41 0.001"
+            ></a-plane>
+            <a-plane
+              width="1.65" height="0.01"
+              color="#FF6B6B" shader="flat"
+              position="0 -0.41 0.001"
+            ></a-plane>
+
+            <!-- Título dinámico (VICTORIA / GAME OVER / TIEMPO AGOTADO) -->
+            <a-text
+              id="gameover-title"
+              value="GAME OVER"
+              color="#FF6B6B" width="2.6"
+              align="center" anchor="center"
+              position="0 0.26 0.01"
+            ></a-text>
+
+            <!-- Puntaje final y record -->
+            <a-text
+              id="gameover-score"
+              value="Puntaje: 0   |   RECORD: 0"
+              color="#FFD166" width="1.55" wrap-count="28"
+              align="center" anchor="center"
+              position="0 0.11 0.01"
+            ></a-text>
+
+            <!-- Razón del fin de partida -->
+            <a-text
+              id="gameover-reason"
+              value=""
+              color="#aaccff" width="1.45"
+              align="center" anchor="center"
+              position="0 0.00 0.01"
+            ></a-text>
+
+            <!-- ── Botón REINICIAR ── -->
+            <a-entity position="-0.40 -0.22 0.01">
+              <a-plane
+                id="restart-btn-box"
+                class="clickable"
+                width="0.68" height="0.14"
+                color="#3b82f6" shader="flat"
+              ></a-plane>
+              <a-text
+                value="↺  REINICIAR"
+                color="#ffffff" width="2.4"
+                align="center" anchor="center"
+                position="0 0 0.005"
+              ></a-text>
+            </a-entity>
+
+            <!-- ── Botón MENÚ ── -->
+            <a-entity position="0.40 -0.22 0.01">
+              <a-plane
+                id="menu-btn-box"
+                class="clickable"
+                width="0.68" height="0.14"
+                color="#FF6B6B" shader="flat"
+              ></a-plane>
+              <a-text
+                value="⌂  MENÚ"
+                color="#ffffff" width="2.4"
+                align="center" anchor="center"
+                position="0 0 0.005"
+              ></a-text>
+            </a-entity>
+          </a-entity>
+
+
+          <!-- Foxy jumpscare (derrota) -->
+          <a-entity
+            id="foxy-screamer"
+            gltf-model="#foxy-model"
+            position="0 0 -0.42"
+            rotation="0 -5 0"
+            scale="0.4 0.4 0.4"
+            foxy-animation="clip: Jumpscare; loop: once"
+            visible="false"
+          ></a-entity>
+
+          <!-- Capa de fade para el jumpscare -->
+          <a-plane
+            id="foxy-fade"
+            width="2.2" height="1.6"
+            color="#000000"
+            material="transparent: true; opacity: 0; shader: flat"
+            position="0 0 -0.45"
+            visible="false"
+          ></a-plane>
+
+          <!--
+            El arma es hija de la cámara para mantener alineación con la vista.
+            weapon-logic consulta game-manager (system) para gastar munición
+            sin acoplarse directamente a los targets.
           -->
           <a-entity
             id="weapon"
@@ -182,7 +468,6 @@
             rotation="0 -10 0"
             scale="0.06 0.06 0.06"
             gltf-model="#weapon-model"
-            raycaster="objects: .target, .bird-hitbox; far: 50; showLine: false"
             weapon-logic="shootCooldown: 250; maxVisualSize: 0.22"
           ></a-entity>
         </a-camera>

@@ -1,162 +1,179 @@
+/**
+ * target-logic — Componente de comportamiento de ave (Duck Hunt VR).
+ *
+ * Modelo "un pájaro a la vez":
+ *   - Todas las aves empiezan ocultas.
+ *   - El game-manager emite 'spawn-bird' con { birdId } indicando cuál activar.
+ *   - Solo el ave cuyo id coincide se activa, genera trayectoria y vuela.
+ *   - Si el ave sale del escenario sin ser cazada → emite 'bird-escaped'.
+ *   - Al ser impactada → animación de caída, queda muerta.
+ *   - 'despawn-bird' y 'game-over' ocultan todas las aves.
+ */
 AFRAME.registerComponent('target-logic', {
   schema: {
-    movementAreaMin: { type: 'vec3', default: { x: -8, y: 1, z: -14 } },
-    movementAreaMax: { type: 'vec3', default: { x: 8, y: 6, z: -4 } },
-    speed: { type: 'number', default: 2.3 },
-    respawnDelay: { type: 'number', default: 1200 },
-    // Nuevos parámetros para generación procedural
-    spawnHeight: { type: 'number', default: 2 },
-    spawnHeightVariation: { type: 'number', default: 1.5 },
-    flightDistance: { type: 'number', default: 15 } // Distancia que recorre antes de desaparecer
+    movementAreaMin:       { type: 'vec3',   default: { x: -8,  y: 1, z: -14 } },
+    movementAreaMax:       { type: 'vec3',   default: { x:  8,  y: 6, z:  -4 } },
+    speed:                 { type: 'number', default: 2.3 },
+    spawnHeight:           { type: 'number', default: 2 },
+    spawnHeightVariation:  { type: 'number', default: 1.5 },
+    flightDistance:        { type: 'number', default: 15 }
   },
 
   init: function () {
     this.gameSystem = this.el.sceneEl.systems['game-manager'];
 
-    this.isAlive = true;
+    this.isAlive          = false;
     this.isActiveInFlight = false;
+    this.currentSpeedMultiplier = 1.0;
 
-    this.velocity = new THREE.Vector3();
-    this.startPosition = new THREE.Vector3();
+    this.velocity       = new THREE.Vector3();
+    this.startPosition  = new THREE.Vector3();
     this.targetPosition = new THREE.Vector3();
     this.currentDistance = 0;
 
-    // Posición inicial fuera de vista
-    this.generateFlightPath();
-    this.scheduleActivation();
+    // Ocultar hasta que sea seleccionada
+    this.el.setAttribute('visible', false);
 
-    // El disparo no llama métodos directos del target
+    // Disparo indirecto: weapon-logic emite 'hit-by-shot' sobre la entidad
     this.el.addEventListener('hit-by-shot', this.onHitByShot.bind(this));
+
+    var self = this;
+
+    // ── Evento: aparece un pájaro (solo si es este) ──
+    this.el.sceneEl.addEventListener('spawn-bird', function (e) {
+      if (e.detail && e.detail.birdId === self.el.id) {
+        self.currentSpeedMultiplier = e.detail.speedMultiplier || 1.0;
+        self.activate();
+      }
+    });
+
+    // ── Evento: ocultar pájaro (forzado por game-manager) ──
+    this.el.sceneEl.addEventListener('despawn-bird', function (e) {
+      if (e.detail && e.detail.birdId === self.el.id) {
+        self.isAlive = false;
+        self.isActiveInFlight = false;
+        self.el.setAttribute('visible', false);
+      }
+    });
+
+    // ── Evento: inicio de partida → resetear todas las aves ──
+    this.el.sceneEl.addEventListener('round-started', function () {
+      self.isAlive = false;
+      self.isActiveInFlight = false;
+      self.el.setAttribute('visible', false);
+      self.el.object3D.rotation.set(0, 0, 0);
+    });
+
+    // ── Evento: fin de partida → ocultar todo ──
+    this.el.sceneEl.addEventListener('game-over', function () {
+      self.isAlive = false;
+      self.isActiveInFlight = false;
+      self.el.setAttribute('visible', false);
+    });
   },
+
+  /* ── Activación del ave ────────────────────────────────────────────── */
+
+  activate: function () {
+    this.isAlive = true;
+    this.isActiveInFlight = false;
+    this.el.object3D.rotation.set(0, 0, 0);
+    this.generateFlightPath();
+    this.el.setAttribute('visible', true);
+    this.isActiveInFlight = true;
+  },
+
+  /* ── Tick: movimiento del ave ──────────────────────────────────────── */
 
   tick: function (timeMs, deltaMs) {
-    if (!this.isAlive || !this.isActiveInFlight) {
-      return;
-    }
+    if (!this.isAlive || !this.isActiveInFlight) return;
+    if (!this.gameSystem || this.gameSystem.gameOver || this.gameSystem.waitingForStart) return;
 
-    if (!this.gameSystem || this.gameSystem.gameOver) {
-      return;
-    }
-
-    var deltaSeconds = deltaMs / 1000;
+    var deltaSeconds    = deltaMs / 1000;
     var currentPosition = this.el.object3D.position;
+    var effectiveSpeed  = this.data.speed * this.currentSpeedMultiplier;
 
-    // Mover el ave en línea recta hacia su objetivo
+    // Mover en línea recta con velocidad escalada por nivel
     currentPosition.addScaledVector(this.velocity, deltaSeconds);
-    this.currentDistance += this.data.speed * deltaSeconds;
+    this.currentDistance += effectiveSpeed * deltaSeconds;
 
-    // Rotar el ave en la dirección del movimiento
+    // Rotar hacia la dirección de vuelo
     this.updateRotation();
 
-    // Verificar si llegó a su destino o salió del área
+    // ¿Salió del área o completó la trayectoria?
     if (this.currentDistance >= this.data.flightDistance || this.isOutOfBounds(currentPosition)) {
-      this.despawnAndRespawn();
+      this.onEscape();
     }
   },
+
+  /* ── Generación de trayectoria procedural ──────────────────────────── */
 
   generateFlightPath: function () {
     var min = this.data.movementAreaMin;
     var max = this.data.movementAreaMax;
-    
-    // Tipos de trayectorias: 0=izq a der, 1=der a izq, 2=atrás a adelante, 3=diagonal
+
+    // 4 tipos de trayectoria: izq→der, der→izq, atrás→adelante, diagonal
     var pathType = Math.floor(Math.random() * 4);
-    
-    var startX, startY, startZ;
-    var endX, endY, endZ;
-    
-    // Altura aleatoria para esta trayectoria
+    var startX, startY, startZ, endX, endY, endZ;
+
     var flightHeight = this.data.spawnHeight + (Math.random() - 0.5) * this.data.spawnHeightVariation;
     flightHeight = THREE.MathUtils.clamp(flightHeight, min.y, max.y);
-    
-    switch(pathType) {
-      case 0: // Izquierda a Derecha
+
+    switch (pathType) {
+      case 0: // Izquierda → Derecha
         startX = min.x - 3;
         startZ = min.z + Math.random() * (max.z - min.z);
         startY = flightHeight + (Math.random() - 0.5) * 0.5;
-        
-        endX = max.x + 3;
-        endZ = startZ + (Math.random() - 0.5) * 4; // Ligera desviación en Z
-        endY = flightHeight + (Math.random() - 0.5);
+        endX   = max.x + 3;
+        endZ   = startZ + (Math.random() - 0.5) * 4;
+        endY   = flightHeight + (Math.random() - 0.5);
         break;
-        
-      case 1: // Derecha a Izquierda
+
+      case 1: // Derecha → Izquierda
         startX = max.x + 3;
         startZ = min.z + Math.random() * (max.z - min.z);
         startY = flightHeight + (Math.random() - 0.5) * 0.5;
-        
-        endX = min.x - 3;
-        endZ = startZ + (Math.random() - 0.5) * 4;
-        endY = flightHeight + (Math.random() - 0.5);
+        endX   = min.x - 3;
+        endZ   = startZ + (Math.random() - 0.5) * 4;
+        endY   = flightHeight + (Math.random() - 0.5);
         break;
-        
-      case 2: // Atrás hacia Adelante (más común en Duck Hunt)
+
+      case 2: // Atrás → Adelante (clásico Duck Hunt)
         startX = (Math.random() - 0.5) * (max.x - min.x);
         startZ = min.z - 4;
         startY = flightHeight;
-        
-        endX = startX + (Math.random() - 0.5) * 6; // Desviación lateral
-        endZ = max.z + 2;
-        endY = flightHeight + (Math.random() - 0.5) * 1.5;
+        endX   = startX + (Math.random() - 0.5) * 6;
+        endZ   = max.z + 2;
+        endY   = flightHeight + (Math.random() - 0.5) * 1.5;
         break;
-        
-      case 3: // Diagonal (mezcla de lateral + profundidad)
+
+      case 3: // Diagonal
         if (Math.random() > 0.5) {
-          // Diagonal desde atrás-izquierda a adelante-derecha
-          startX = min.x - 2;
-          startZ = min.z - 3;
-          endX = max.x + 2;
-          endZ = max.z + 1;
+          startX = min.x - 2; startZ = min.z - 3;
+          endX   = max.x + 2; endZ   = max.z + 1;
         } else {
-          // Diagonal desde atrás-derecha a adelante-izquierda
-          startX = max.x + 2;
-          startZ = min.z - 3;
-          endX = min.x - 2;
-          endZ = max.z + 1;
+          startX = max.x + 2; startZ = min.z - 3;
+          endX   = min.x - 2; endZ   = max.z + 1;
         }
         startY = flightHeight;
-        endY = flightHeight + (Math.random() - 0.5) * 1;
+        endY   = flightHeight + (Math.random() - 0.5);
         break;
     }
-    
-    // Establecer posiciones
+
     this.startPosition.set(startX, startY, startZ);
     this.targetPosition.set(endX, endY, endZ);
-    this.el.setAttribute('position', this.startPosition);
-    
-    // Calcular velocidad como vector unitario * velocidad
+    this.el.object3D.position.copy(this.startPosition);
+
     this.velocity.copy(this.targetPosition).sub(this.startPosition).normalize();
-    this.velocity.multiplyScalar(this.data.speed);
-    
-    // Resetear distancia recorrida
+    this.velocity.multiplyScalar(this.data.speed * this.currentSpeedMultiplier);
     this.currentDistance = 0;
-    
-    // Guardar el tipo de trayectoria para debug
-    this.pathType = pathType;
   },
 
-  scheduleActivation: function () {
-    var self = this;
-
-    this.isActiveInFlight = false;
-    this.el.setAttribute('visible', false);
-
-    window.setTimeout(function () {
-      if (!self.isAlive || (self.gameSystem && self.gameSystem.gameOver)) {
-        return;
-      }
-
-      // Generar nueva trayectoria aleatoria
-      self.generateFlightPath();
-      self.el.setAttribute('visible', true);
-      self.isActiveInFlight = true;
-    }, this.data.respawnDelay);
-  },
+  /* ── Verificar si el ave salió del área de juego ───────────────────── */
 
   isOutOfBounds: function (position) {
     var min = this.data.movementAreaMin;
     var max = this.data.movementAreaMax;
-    
-    // Márgenes más amplios para permitir que el ave salga completamente
     return (
       position.x < min.x - 5 || position.x > max.x + 5 ||
       position.z < min.z - 6 || position.z > max.z + 4 ||
@@ -164,83 +181,74 @@ AFRAME.registerComponent('target-logic', {
     );
   },
 
-  despawnAndRespawn: function () {
-    // El ave completó su trayectoria o salió del área
+  /* ── El ave escapó (salió del escenario sin ser cazada) ────────────── */
+
+  onEscape: function () {
+    if (!this.isAlive) return;
+    this.isAlive          = false;
     this.isActiveInFlight = false;
     this.el.setAttribute('visible', false);
-    
-    // Programar nueva aparición con nueva trayectoria
-    this.scheduleActivation();
+    // Notificar al game-manager
+    this.el.sceneEl.emit('bird-escaped');
   },
 
+  /* ── Rotación del ave hacia la dirección de vuelo ──────────────────── */
+
   updateRotation: function () {
-    // Rotar el ave para que mire en la dirección de su movimiento
     var direction = this.velocity.clone().normalize();
-    
-    // Calcular ángulo de rotación en Y (horizontal)
     var angleY = Math.atan2(direction.x, direction.z);
-    
-    // Calcular ángulo de rotación en X (pitch) para inclinación
     var angleX = Math.asin(-direction.y);
-    
-    // Aplicar rotación suave
     this.el.object3D.rotation.set(angleX * 0.3, angleY, 0);
   },
 
+  /* ── Impacto de disparo ────────────────────────────────────────────── */
+
   onHitByShot: function () {
-    if (!this.isAlive || !this.isActiveInFlight) {
-      return;
-    }
+    if (!this.isAlive || !this.isActiveInFlight) return;
 
     console.log('Ave ' + this.el.id + ' impactada!');
 
-    // Marcar como golpeada inmediatamente
+    // Marcar como muerta inmediatamente (evita doble impacto)
+    this.isAlive          = false;
     this.isActiveInFlight = false;
-    
-    // Efecto visual: hacer que el ave "caiga" antes de desaparecer
+
+    // Animación de caída
     this.playHitAnimation();
-    
-    // Registrar el hit en el sistema de juego
+
+    // Registrar en game-manager
     if (this.gameSystem) {
       this.gameSystem.registerTargetHit(this.el);
     }
 
-    this.el.emit('target-dead', { id: this.el.id });
-
-    // Desaparecer después de una breve animación
+    // Ocultar después de la animación
     var self = this;
-    setTimeout(function() {
+    setTimeout(function () {
       self.el.setAttribute('visible', false);
-      // Programar respawn con nueva trayectoria
-      self.scheduleActivation();
-    }, 300);
+    }, 500);
   },
 
+  /* ── Animación de caída al ser golpeada ─────────────────────────────── */
+
   playHitAnimation: function () {
-    // Animación simple de caída cuando el ave es golpeada
     var currentRotation = this.el.object3D.rotation;
     var currentPosition = this.el.object3D.position;
-    
-    // Hacer que el ave "caiga" rotando
-    var fallDuration = 300;
-    var startTime = performance.now();
-    var self = this;
-    var initialY = currentPosition.y;
-    
-    var animateFall = function() {
-      var elapsed = performance.now() - startTime;
+    var fallDuration    = 500;
+    var startTime       = performance.now();
+    var initialY        = currentPosition.y;
+
+    var animateFall = function () {
+      var elapsed  = performance.now() - startTime;
       var progress = Math.min(elapsed / fallDuration, 1);
-      
-      if (progress < 1 && self.isAlive) {
-        // Rotar el ave como si cayera
+
+      if (progress < 1) {
+        // Rotar como cayendo
         currentRotation.z = progress * Math.PI;
-        // Mover ligeramente hacia abajo
-        currentPosition.y = initialY - (progress * 2);
-        
+        // Caer hacia abajo
+        currentPosition.y = initialY - (progress * 3);
         requestAnimationFrame(animateFall);
       }
     };
-    
+
     animateFall();
   }
 });
