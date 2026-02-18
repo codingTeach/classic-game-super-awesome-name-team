@@ -21,6 +21,9 @@ AFRAME.registerComponent('hud-logic', {
     this.boundOnGameOver = this.onGameOver.bind(this);
     this.boundOnRoundStarted = this.onRoundStarted.bind(this);
 
+    this.screamerEntity = null;
+    this.createScreamerEntity();
+
     this.scene.addEventListener('game-state-changed', this.boundOnStateChanged);
     this.scene.addEventListener('game-over', this.boundOnGameOver);
     this.scene.addEventListener('round-started', this.boundOnRoundStarted);
@@ -41,6 +44,8 @@ AFRAME.registerComponent('hud-logic', {
   },
 
   onRoundStarted: function () {
+    this.hideScreamer();
+
     if (this.statusText) {
       this.statusText.setAttribute('value', '');
     }
@@ -62,6 +67,13 @@ AFRAME.registerComponent('hud-logic', {
     if (this.statusText) {
       this.statusText.setAttribute('value', label);
     }
+
+    if (reason === 'out-of-ammo' || reason === 'time-up') {
+      this.showScreamer();
+    } else {
+      this.hideScreamer();
+    }
+
     this.scheduleResize();
   },
 
@@ -145,5 +157,38 @@ AFRAME.registerComponent('hud-logic', {
     box.getSize(size);
 
     return { width: size.x, height: size.y };
+  },
+
+  createScreamerEntity: function () {
+    var parent = this.el.parentEl || this.el;
+    if (!parent || !parent.appendChild) {
+      return;
+    }
+
+    this.screamerEntity = document.createElement('a-entity');
+    this.screamerEntity.setAttribute('id', 'foxy-screamer');
+    this.screamerEntity.setAttribute('gltf-model', '#foxy-model');
+    this.screamerEntity.setAttribute('position', '-0.2 0 -0.32');
+    this.screamerEntity.setAttribute('rotation', '0 -5 0');
+    this.screamerEntity.setAttribute('scale', '0.4 0.4 0.4');
+    this.screamerEntity.setAttribute('visible', 'false');
+
+    parent.appendChild(this.screamerEntity);
+  },
+
+  showScreamer: function () {
+    if (!this.screamerEntity) {
+      return;
+    }
+
+    this.screamerEntity.setAttribute('visible', 'true');
+  },
+
+  hideScreamer: function () {
+    if (!this.screamerEntity) {
+      return;
+    }
+
+    this.screamerEntity.setAttribute('visible', 'false');
   }
 });
